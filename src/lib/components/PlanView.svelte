@@ -1,4 +1,21 @@
+<script lang="ts" module>
+	import type { Point as P } from '#lib/planner/types.ts';
+
+	/** Coordinate helpers handed to overlays drawn on top of the plan. */
+	export interface PlanApi {
+		/** Screen pixels per cm */
+		scale: number;
+		width: number;
+		height: number;
+		/** Plan point (cm) → pixels within the view */
+		toScreen: (p: P) => { x: number; y: number };
+		/** Pointer → plan point (cm) */
+		toPlan: (e: { clientX: number; clientY: number }) => P;
+	}
+</script>
+
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { PALETTE } from '#lib/planner/defaults.ts';
 	import { cm, m2 } from '#lib/planner/format.ts';
 	import { bbox, describeCheck, normalizeAngle } from '#lib/planner/furniture.ts';
@@ -15,8 +32,12 @@
 		onopen?: (id: string) => void;
 		/** Screen position above the selected piece (px within this view) */
 		onanchor?: (p: { x: number; y: number } | null) => void;
+		/** Extra SVG drawn on top of the plan (in plan units) */
+		overlay?: Snippet<[PlanApi]>;
+		/** HTML on top of the plan, positioned with `api.toScreen` */
+		htmlOverlay?: Snippet<[PlanApi]>;
 	}
-	let { showDims, editable = true, onopen, onanchor }: Props = $props();
+	let { showDims, editable = true, onopen, onanchor, overlay, htmlOverlay }: Props = $props();
 
 	let wrap = $state<HTMLDivElement>();
 	let svg = $state<SVGSVGElement>();
@@ -36,6 +57,26 @@
 	});
 	// Font sizes and tick size in plan units, so they look constant on screen
 	const scale = $derived(Math.min((width || 600) / vb.w, (height || 500) / vb.h));
+
+	/** Same mapping as the SVG's viewBox with xMidYMid meet, without reading the DOM */
+	const api = $derived.by<PlanApi>(() => {
+		const s = scale;
+		const w = width || 600;
+		const h = height || 500;
+		const ox = (w - vb.w * s) / 2;
+		const oy = (h - vb.h * s) / 2;
+		const { minX, minY } = vb;
+		return {
+			scale: s,
+			width: w,
+			height: h,
+			toScreen: ([x, y]) => ({ x: (x - minX) * s + ox, y: (y - minY) * s + oy }),
+			toPlan: (e) => {
+				const r = wrap!.getBoundingClientRect();
+				return [(e.clientX - r.left - ox) / s + minX, (e.clientY - r.top - oy) / s + minY];
+			}
+		};
+	});
 	const fs = $derived(11.5 / scale);
 	const fsS = $derived(10.5 / scale);
 	const tk = $derived(4 / scale);
@@ -254,7 +295,7 @@
 
 <div
 	bind:this={wrap}
-	class="h-full w-full touch-none select-none"
+	class="relative h-full w-full touch-none select-none"
 	bind:clientWidth={width}
 	bind:clientHeight={height}
 	{onpointerdown}
@@ -514,7 +555,10 @@
 		/>
 		<text class="dimt" x={sx + 50} y={sy - fsS * 0.6} font-size={fsS} text-anchor="middle">1 m</text
 		>
+
+		{@render overlay?.(api)}
 	</svg>
+	{@render htmlOverlay?.(api)}
 </div>
 
 <style>

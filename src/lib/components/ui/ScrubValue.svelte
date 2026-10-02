@@ -12,9 +12,21 @@
 		min?: number;
 		max?: number;
 		step?: number;
+		/** `pill`: compact, label inline, for chips floating on the drawing */
+		variant?: 'field' | 'pill';
 		onchange: (value: number) => void;
 	}
-	let { label, value, unit = 'cm', min, max, step = 1, onchange }: Props = $props();
+	let {
+		label,
+		value,
+		unit = 'cm',
+		min,
+		max,
+		step = 1,
+		variant = 'field',
+		onchange
+	}: Props = $props();
+	const pill = $derived(variant === 'pill');
 
 	let editing = $state(false);
 	let dragging = $state(false);
@@ -77,13 +89,22 @@
 	}
 </script>
 
-<div class="grid min-w-0 gap-1">
-	<span class="truncate text-xs text-muted">{label}</span>
+<div class={pill ? 'flex' : 'grid min-w-0 gap-1'}>
+	{#if !pill}<span class="truncate text-xs text-muted">{label}</span>{/if}
 	{#if editing}
-		<span class="flex items-baseline rounded-xl bg-sheet px-3 py-2 ring-2 ring-accent ring-inset">
+		<span
+			class={[
+				'flex items-baseline rounded-xl bg-sheet ring-2 ring-accent ring-inset',
+				pill ? 'gap-1.5 px-2.5 py-1.5' : 'px-3 py-2'
+			]}
+		>
+			{#if pill}<span class="text-xs whitespace-nowrap text-muted">{label}</span>{/if}
 			<input
 				bind:this={input}
-				class="w-full min-w-0 bg-transparent text-[15px] font-semibold outline-none"
+				class={[
+					'min-w-0 bg-transparent font-semibold outline-none',
+					pill ? 'w-12 text-[14px]' : 'w-full text-[15px]'
+				]}
 				inputmode="decimal"
 				aria-label={label}
 				value={shown}
@@ -102,7 +123,8 @@
 		<div
 			bind:this={chip}
 			class={[
-				'flex cursor-ew-resize touch-pan-y items-baseline justify-between rounded-xl px-3 py-2 transition-colors select-none',
+				'flex cursor-ew-resize touch-pan-y items-baseline rounded-xl transition-colors select-none',
+				pill ? 'gap-1.5 px-2.5 py-1.5' : 'justify-between px-3 py-2',
 				dragging ? 'bg-accent-soft text-accent' : 'bg-paper hover:bg-line'
 			]}
 			role="spinbutton"
@@ -119,7 +141,8 @@
 			onpointercancel={onpointerup}
 			{onkeydown}
 		>
-			<span class="text-[15px] font-semibold">{shown}</span>
+			{#if pill}<span class="text-xs whitespace-nowrap text-muted">{label}</span>{/if}
+			<span class={['font-semibold', pill ? 'text-[14px]' : 'text-[15px]']}>{shown}</span>
 			<span class="text-xs text-muted">{unit}</span>
 		</div>
 	{/if}

@@ -2,20 +2,20 @@
 
 Interactive planner for one room, in three steps:
 
-1. **Shape** (`/room`): room dimensions, doors, glass front and loggia.
+1. **Shape** (`/room`): shape the room right on the floor plan. Drag the right wall (width), the front wall (length), the hallway corner, the doors (move, or drag their ends for the width), where the glass starts and ends, and the loggia parapet (depth). The part you touch shows its measurements in a small card next to it: drag a value sideways, use the arrow keys or click it to type. Hinge and swing toggle there too. The side panel keeps what the plan can't show (heights, wall thickness, measured status).
 2. **Furnish** (`/furnish`): drag furniture from the catalog dock into the room (or click a tile) and arrange it in 3D or a 2D floor plan. The selected piece gets a floating toolbar (rotate, color, duplicate, details, delete); in the plan it also has resize handles and a rotation knob. Pieces that stick out of the room, overlap or block a door glow red, the blocked door's swing area turns red, and the toolbar says why.
 3. **Experience** (`/experience`): realistic preview.
 
 The URL holds what you are looking at, so Back, reload and links work:
 
-| URL                                         | Meaning                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------ |
-| `/room?focus=door`                          | open section: `walls` (default), `door`, `front`, `loggia`, `more` |
-| `/furnish?view=plan`                        | floor plan instead of 3D                                           |
-| `/furnish?item=<id>`                        | selected piece (Back or Esc deselects)                             |
-| `/furnish?item=<id>&details=1`              | details panel with exact sizes                                     |
-| `/experience?shot=window&time=18h30&lamp=1` | viewpoint, clock time, ceiling lamp                                |
-| `/experience?mode=tour`                     | start the camera tour (or `walk`)                                  |
+| URL                                         | Meaning                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
+| `/room?focus=door`                          | part being edited: `walls` (default), `door`, `front`, `loggia`, `more` |
+| `/furnish?view=plan`                        | floor plan instead of 3D                                                |
+| `/furnish?item=<id>`                        | selected piece (Back or Esc deselects)                                  |
+| `/furnish?item=<id>&details=1`              | details panel with exact sizes                                          |
+| `/experience?shot=window&time=18h30&lamp=1` | viewpoint, clock time, ceiling lamp                                     |
+| `/experience?mode=tour`                     | start the camera tour (or `walk`)                                       |
 
 `/` reopens the last visited step.
 
@@ -72,7 +72,9 @@ src/
       Header.svelte, Workspace.svelte (full-screen canvas, floating
                             controls, side panel / bottom sheet)
       PlanView.svelte, Scene3D.svelte, Preview.svelte
-      RoomSettings.svelte
+      RoomHandles.svelte  grips on the plan for walls, doors, glass front, loggia
+      RoomCard.svelte     measurement card next to the focused part
+      RoomSettings.svelte side panel of the shape step
       CatalogDock, SelectionToolbar, Inspector, PieceList, FurnitureIcon
       ui/                 ScrubValue (drag/type number), Segmented, Switch,
                             FloatingBar, IconButton, Icon, ConfirmButton
