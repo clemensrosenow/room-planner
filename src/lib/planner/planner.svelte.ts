@@ -1,4 +1,4 @@
-import { DEFAULT_CFG } from './defaults';
+import { DEFAULT_CFG, PRESETS, type Preset } from './defaults';
 import { newId } from './format';
 import { checkFurniture, moveTo, normalizeAngle, type FurnitureCheck } from './furniture';
 import { computeGeometry } from './geometry';
@@ -45,19 +45,21 @@ class Planner {
 		this.selectedId = id;
 	}
 
-	add() {
+	/** Adds a piece in the middle of the room; numbered if the name is taken. */
+	add(preset: Preset = PRESETS[0]) {
 		const g = this.geo;
-		const n = this.furn.length + 1;
+		let name = preset.name;
+		for (let i = 2; this.furn.some((x) => x.name === name); i++) name = `${preset.name} ${i}`;
 		const f: Furniture = {
 			id: newId(),
-			name: 'Box ' + n,
-			w: 100,
-			d: 60,
-			h: 75,
+			name,
+			w: preset.w,
+			d: preset.d,
+			h: preset.h,
 			cx: Math.round(g.W / 2),
 			cy: Math.round(g.hasNotch ? (g.N + g.L) / 2 : g.L / 2),
 			rot: 0,
-			color: (n + 1) % 5
+			color: preset.color
 		};
 		this.furn.push(f);
 		this.selectedId = f.id;

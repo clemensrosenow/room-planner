@@ -21,3 +21,24 @@ export const DEFAULT_FURN: Furniture[] = [
 
 /** CSS variables of the furniture colors (defined in layout.css). */
 export const PALETTE = ['--f1', '--f2', '--f3', '--f4', '--f5'];
+
+export interface Preset {
+	name: string;
+	w: number;
+	d: number;
+	h: number;
+	color: number;
+}
+
+/** Common pieces with typical sizes (cm) for the "Add" buttons. */
+export const PRESETS: Preset[] = [
+	{ name: 'Box', w: 100, d: 60, h: 75, color: 2 },
+	{ name: 'Bed 90', w: 90, d: 200, h: 45, color: 0 },
+	{ name: 'Bed 140', w: 140, d: 200, h: 45, color: 0 },
+	{ name: 'Desk', w: 140, d: 70, h: 75, color: 1 },
+	{ name: 'Chair', w: 50, d: 50, h: 90, color: 1 },
+	{ name: 'Wardrobe', w: 100, d: 60, h: 200, color: 4 },
+	{ name: 'Sofa', w: 200, d: 90, h: 85, color: 3 },
+	{ name: 'Shelf', w: 80, d: 30, h: 180, color: 2 },
+	{ name: 'Nightstand', w: 45, d: 40, h: 50, color: 4 }
+];
