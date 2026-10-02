@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { cm, m2 } from '#lib/planner/format.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Hinge, Swing } from '#lib/planner/types.ts';
@@ -6,6 +7,7 @@
 	import NumberField from './ui/NumberField.svelte';
 	import Section from './ui/Section.svelte';
 	import SelectField from './ui/SelectField.svelte';
+	import { setParams } from '#lib/url.ts';
 
 	const cfg = $derived(planner.cfg);
 	const g = $derived(planner.geo);
@@ -14,13 +16,23 @@
 		{ value: 'left', label: 'left' },
 		{ value: 'right', label: 'right' }
 	];
+	/** The open section follows `?focus=` (default: walls) */
+	type Part = 'walls' | 'door' | 'front' | 'loggia' | 'more';
+	const focus = $derived(page.url.searchParams.get('focus') ?? 'walls');
+	const section = (part: Part) => ({
+		open: focus === part,
+		ontoggle: (open: boolean) => {
+			if (open) setParams({ focus: part === 'walls' ? null : part }, { replace: true });
+		}
+	});
+
 	const swing = (outLabel: string): { value: Swing; label: string }[] => [
 		{ value: 'in', label: 'into the room' },
 		{ value: 'out', label: outLabel }
 	];
 </script>
 
-<Section title="Room" sub={m2(g.area)} open>
+<Section title="Room" sub={m2(g.area)} {...section('walls')}>
 	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
 		<NumberField label="Total width" value={cfg.W} onchange={(v) => (cfg.W = v)} />
 		<NumberField label="Right wall length" value={cfg.L} onchange={(v) => (cfg.L = v)} />
@@ -35,7 +47,7 @@
 	</p>
 </Section>
 
-<Section title="Room door" sub="in the hallway wall" open>
+<Section title="Room door" sub="in the hallway wall" {...section('door')}>
 	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
 		<NumberField
 			label="Offset from left wall"
@@ -63,7 +75,7 @@
 	</div>
 </Section>
 
-<Section title="Glass front to loggia" open>
+<Section title="Glass front to loggia" {...section('front')}>
 	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
 		<NumberField
 			label="Wall section left"
@@ -110,7 +122,7 @@
 	</p>
 </Section>
 
-<Section title="Loggia" sub={g.D > 0 ? m2(g.loggiaArea) : ''}>
+<Section title="Loggia" sub={g.D > 0 ? m2(g.loggiaArea) : ''} {...section('loggia')}>
 	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
 		<NumberField label="Depth" value={cfg.loggia.D} onchange={(v) => (cfg.loggia.D = v)} />
 		<NumberField
@@ -121,7 +133,7 @@
 	</div>
 </Section>
 
-<Section title="Walls & status">
+<Section title="Walls & status" {...section('more')}>
 	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
 		<NumberField label="Interior walls (display)" value={cfg.tI} onchange={(v) => (cfg.tI = v)} />
 		<NumberField label="Wall to loggia" value={cfg.tE} onchange={(v) => (cfg.tE = v)} />

@@ -99,6 +99,9 @@
 	.btn {
 		@apply cursor-pointer rounded-[5px] border border-line-strong bg-transparent px-[11px] py-1.5 text-[13px] hover:border-ink;
 	}
+	.btn[aria-pressed='true'] {
+		@apply border-accent bg-accent-soft text-accent;
+	}
 	.btn-primary {
 		@apply border-accent bg-accent font-semibold text-sheet hover:border-accent;
 	}

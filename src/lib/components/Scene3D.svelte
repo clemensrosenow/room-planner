@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { planner } from '#lib/planner/planner.svelte.ts';
+	import { selectItem } from '#lib/url.ts';
 	import { RoomScene } from '#lib/planner/scene3d.ts';
 	import { onMount, untrack } from 'svelte';
 
@@ -18,7 +19,7 @@
 	onMount(() => {
 		try {
 			scene = new RoomScene(container, {
-				onSelect: (id) => planner.select(id),
+				onSelect: (id) => selectItem(id),
 				onDrag: (id, cx, cy, snap) => planner.move(id, cx, cy, snap)
 			});
 		} catch {

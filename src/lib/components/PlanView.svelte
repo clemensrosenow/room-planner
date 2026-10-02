@@ -5,8 +5,14 @@
 	import { buildWalls, segmentPolygon } from '#lib/planner/geometry.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Furniture, Point } from '#lib/planner/types.ts';
+	import { selectItem } from '#lib/url.ts';
 
-	let { showDims }: { showDims: boolean } = $props();
+	interface Props {
+		showDims: boolean;
+		/** Furniture can be selected and dragged; otherwise it is only shown faintly */
+		editable?: boolean;
+	}
+	let { showDims, editable = true }: Props = $props();
 
 	let svg = $state<SVGSVGElement>();
 	let width = $state(600);
@@ -121,13 +127,14 @@
 	}
 
 	function onpointerdown(e: PointerEvent) {
+		if (!editable) return;
 		const el = (e.target as Element).closest<SVGElement>('[data-fid]');
 		const f = el && planner.furn.find((x) => x.id === el.dataset.fid);
 		if (!f) {
-			planner.select(null);
+			selectItem(null);
 			return;
 		}
-		planner.select(f.id);
+		selectItem(f.id);
 		const [x, y] = toPlan(e);
 		drag = { f, x, y, cx: f.cx, cy: f.cy };
 		(e.currentTarget as Element).setPointerCapture(e.pointerId);
@@ -155,7 +162,7 @@
 >
 	<svg
 		bind:this={svg}
-		class="block h-full w-full"
+		class={['block h-full w-full', !editable && 'readonly']}
 		viewBox="{vb.minX} {vb.minY} {vb.w} {vb.h}"
 		preserveAspectRatio="xMidYMid meet"
 		role="img"
@@ -424,6 +431,14 @@
 		font-family: var(--font-mono);
 		opacity: 0.8;
 		pointer-events: none;
+	}
+	.readonly .furn {
+		cursor: default;
+		fill-opacity: 0.25;
+		stroke-opacity: 0.35;
+	}
+	.readonly :is(.furn-name, .furn-dim) {
+		opacity: 0.4;
 	}
 	.dist {
 		stroke: var(--accent);

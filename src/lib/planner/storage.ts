@@ -4,6 +4,7 @@ import type { Furniture, PlannerData, RoomConfig } from './types';
 
 const KEY = 'room-planner-v1';
 const VIEW_KEY = KEY + '-view';
+const STEP_KEY = KEY + '-step';
 
 export const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o));
 
@@ -65,17 +66,24 @@ export function saveData(data: PlannerData): boolean {
 	}
 }
 
-export function loadView(): string | null {
+/** Last visited step (path + query), so the app reopens where you left off. */
+export function loadStep(): string {
 	try {
-		return localStorage.getItem(VIEW_KEY);
+		const step = localStorage.getItem(STEP_KEY);
+		if (step?.startsWith('/')) return step;
+		// Before steps existed, only the view was remembered
+		const view = localStorage.getItem(VIEW_KEY);
+		if (view === 'preview') return '/experience';
+		if (view) return view === 'plan' ? '/furnish?view=plan' : '/furnish';
 	} catch {
-		return null;
+		// Storage blocked: start at the beginning
 	}
+	return '/room';
 }
 
-export function saveView(view: string) {
+export function saveStep(step: string) {
 	try {
-		localStorage.setItem(VIEW_KEY, view);
+		localStorage.setItem(STEP_KEY, step);
 	} catch {
 		// ignore
 	}

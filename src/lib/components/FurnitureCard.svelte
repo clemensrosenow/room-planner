@@ -4,6 +4,7 @@
 	import { bbox, normalizeAngle, setPosition, setSize } from '#lib/planner/furniture.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Furniture } from '#lib/planner/types.ts';
+	import { selectItem } from '#lib/url.ts';
 	import ConfirmButton from './ui/ConfirmButton.svelte';
 	import NumberField from './ui/NumberField.svelte';
 
@@ -26,7 +27,7 @@
 {#if !selected}
 	<button
 		class="flex w-full cursor-pointer items-center gap-2 rounded-md border border-line bg-paper px-2.5 py-2 text-left hover:border-line-strong"
-		onclick={() => planner.select(f.id)}
+		onclick={() => selectItem(f.id)}
 	>
 		<span
 			class="h-3 w-3 flex-none rounded-sm border border-line-strong"
@@ -116,11 +117,14 @@
 		</div>
 
 		<div class="flex flex-wrap items-center gap-2">
-			<button class="btn" onclick={() => planner.duplicate(f)}>Duplicate</button>
+			<button class="btn" onclick={() => selectItem(planner.duplicate(f).id)}>Duplicate</button>
 			<ConfirmButton
 				label="Delete"
 				confirmLabel="Really delete?"
-				onconfirm={() => planner.remove(f)}
+				onconfirm={() => {
+					planner.remove(f);
+					selectItem(null);
+				}}
 			/>
 		</div>
 	</div>

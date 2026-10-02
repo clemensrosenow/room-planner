@@ -2,17 +2,19 @@ import { DEFAULT_CFG, PRESETS, type Preset } from './defaults';
 import { newId } from './format';
 import { checkFurniture, moveTo, normalizeAngle, type FurnitureCheck } from './furniture';
 import { computeGeometry } from './geometry';
-import { clone, loadData, loadView, saveData, saveView } from './storage';
-import type { Furniture, View } from './types';
+import { clone, loadData, saveData } from './storage';
+import type { Furniture } from './types';
 
-/** Central app state: room inputs, furniture and UI selection. */
+/**
+ * Central app state: room inputs and furniture. The selection mirrors the URL
+ * (`/furnish?item=…`) and is set by that page.
+ */
 class Planner {
 	cfg = $state(clone(DEFAULT_CFG));
 	furn = $state<Furniture[]>([]);
 	measured = $state(false);
 
 	selectedId = $state<string | null>(null);
-	view = $state<View>('3d');
 	saved = $state(true);
 	canUndo = $state(false);
 	canRedo = $state(false);
@@ -36,8 +38,6 @@ class Planner {
 		this.cfg = data.cfg;
 		this.furn = data.furn;
 		this.measured = data.measured;
-		const view = loadView();
-		if (view === 'plan' || view === 'preview') this.view = view;
 	}
 
 	/** Persists the data and records an undo step. Called on every change. */
@@ -84,7 +84,6 @@ class Planner {
 		this.cfg = d.cfg;
 		this.furn = d.furn;
 		this.measured = d.measured;
-		if (!this.furn.some((f) => f.id === this.selectedId)) this.selectedId = null;
 		this.updateHistoryFlags();
 	}
 
@@ -93,17 +92,8 @@ class Planner {
 		this.canRedo = this.future.length > 0;
 	}
 
-	setView(v: View) {
-		this.view = v;
-		saveView(v);
-	}
-
-	select(id: string | null) {
-		this.selectedId = id;
-	}
-
 	/** Adds a piece in the middle of the room; numbered if the name is taken. */
-	add(preset: Preset = PRESETS[0]) {
+	add(preset: Preset = PRESETS[0]): Furniture {
 		const g = this.geo;
 		let name = preset.name;
 		for (let i = 2; this.furn.some((x) => x.name === name); i++) name = `${preset.name} ${i}`;
@@ -119,10 +109,10 @@ class Planner {
 			color: preset.color
 		};
 		this.furn.push(f);
-		this.selectedId = f.id;
+		return f;
 	}
 
-	duplicate(f: Furniture) {
+	duplicate(f: Furniture): Furniture {
 		const copy = {
 			...$state.snapshot(f),
 			id: newId(),
@@ -131,12 +121,11 @@ class Planner {
 			cy: f.cy + 20
 		};
 		this.furn.push(copy);
-		this.selectedId = copy.id;
+		return copy;
 	}
 
 	remove(f: Furniture) {
 		this.furn = this.furn.filter((x) => x.id !== f.id);
-		if (this.selectedId === f.id) this.selectedId = null;
 	}
 
 	/** Drag move; snaps to walls and other pieces unless `snap` is false. */

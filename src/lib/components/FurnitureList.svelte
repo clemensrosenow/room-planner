@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { PRESETS } from '#lib/planner/defaults.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
+	import { selectItem } from '#lib/url.ts';
 	import FurnitureCard from './FurnitureCard.svelte';
 	import Section from './ui/Section.svelte';
 
@@ -14,7 +15,7 @@
 			<button
 				class={['btn px-2 py-1 text-xs', i === 0 && 'btn-primary']}
 				title="{preset.w} × {preset.d} × {preset.h} cm"
-				onclick={() => planner.add(preset)}>+ {preset.name}</button
+				onclick={() => selectItem(planner.add(preset).id)}>+ {preset.name}</button
 			>
 		{/each}
 	</div>

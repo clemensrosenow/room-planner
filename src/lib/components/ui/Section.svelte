@@ -5,12 +5,18 @@
 		title: string;
 		sub?: string;
 		open?: boolean;
+		/** Called when the user opens or closes the section */
+		ontoggle?: (open: boolean) => void;
 		children: Snippet;
 	}
-	let { title, sub = '', open = false, children }: Props = $props();
+	let { title, sub = '', open = false, ontoggle, children }: Props = $props();
 </script>
 
-<details class="group border-b border-line" {open}>
+<details
+	class="group border-b border-line"
+	{open}
+	ontoggle={(e) => ontoggle?.((e.currentTarget as HTMLDetailsElement).open)}
+>
 	<summary
 		class="flex cursor-pointer list-none items-baseline gap-2 px-3.5 py-[11px] text-[15px] font-semibold tracking-[.04em] uppercase font-stretch-[78%] [&::-webkit-details-marker]:hidden"
 	>

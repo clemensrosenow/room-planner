@@ -5,7 +5,10 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			/** The selection added this history entry, so deselecting can go back */
+			selectionPushed?: boolean;
+		}
 		// interface Platform {}
 	}
 }
