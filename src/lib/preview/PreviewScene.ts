@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import { buildWalls, type Geometry } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
+import { buildFurniture, MaterialKit } from './models';
 import type { Shot } from './shots';
 import { dayOfYear, sunDirection, sunLight } from './sun';
 import { WalkControls } from './WalkControls';
@@ -22,6 +25,25 @@ interface CameraState {
 }
 
 const GLIDE = 2.2; // seconds between shots
+
+/** Replaces NaN/Infinity with black and caps extreme HDR values. */
+const SanitizeShader = {
+	uniforms: { tDiffuse: { value: null } },
+	vertexShader: /* glsl */ `
+		varying vec2 vUv;
+		void main() {
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+		}`,
+	fragmentShader: /* glsl */ `
+		uniform sampler2D tDiffuse;
+		varying vec2 vUv;
+		void main() {
+			vec4 c = texture2D(tDiffuse, vUv);
+			if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0);
+			gl_FragColor = vec4(min(c.rgb, vec3(64.0)), c.a);
+		}`
+};
 const HOLD = 5; // seconds per tour shot
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
@@ -46,7 +68,24 @@ export class PreviewScene {
 	private walk: WalkControls;
 	private root = new THREE.Group();
 	private sky = new Sky();
+	/** Copy of the sky that only feeds reflections and ambient light */
+	private envSky = new Sky();
+	private envScene = new THREE.Scene();
+	private pmrem: THREE.PMREMGenerator;
+	private envTarget: THREE.WebGLRenderTarget | null = null;
+	private envGround = new THREE.MeshBasicMaterial({ color: 0x4a5040 });
+	private envDirty = true;
+	private envUpdated = 0;
 	private sun = new THREE.DirectionalLight(0xffffff, 3);
+	/** Soft daylight through the glass front */
+	private windowLight = new THREE.RectAreaLight(0xffffff, 0, 1, 1);
+	/** Warm light bounced off the sunlit patch of floor (cheap global illumination) */
+	private bounce = new THREE.PointLight(0xffd2a0, 0, 6, 2);
+	/** Warm light reflected by the wooden floor onto walls and ceiling */
+	private floorBounce = new THREE.HemisphereLight(0xfff6ec, 0xc59a6c, 0);
+	private lampOn = false;
+	private daylight = 1;
+	private bloom: UnrealBloomPass;
 	private lamp = new THREE.PointLight(0xffd6a6, 0, 0, 2);
 	private lampShade = new THREE.MeshStandardMaterial({
 		color: 0xffffff,
@@ -54,6 +93,7 @@ export class PreviewScene {
 		emissiveIntensity: 0
 	});
 	private ceiling: THREE.Object3D | null = null;
+	private shade: THREE.Object3D | null = null;
 	private geo: Geometry | null = null;
 	private hours = 9;
 	private resizeObserver: ResizeObserver;
@@ -71,33 +111,44 @@ export class PreviewScene {
 		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 		r.shadowMap.enabled = true;
 		r.shadowMap.type = THREE.PCFShadowMap;
-		r.toneMapping = THREE.ACESFilmicToneMapping;
-		r.toneMappingExposure = 0.85;
+		// Neutral keeps whites white and colors true, while rolling off bright windows
+		r.toneMapping = THREE.NeutralToneMapping;
+		r.toneMappingExposure = 1;
 		r.domElement.className = 'block h-full w-full touch-none';
 		el.appendChild(r.domElement);
 
 		this.root.scale.setScalar(0.01);
 		this.scene.add(this.root);
 
-		// Sky dome and ground far below the window
+		// Sky dome with drifting clouds, and ground far below the window
+		for (const sky of [this.sky, this.envSky]) {
+			const u = sky.material.uniforms;
+			u.turbidity.value = 3;
+			u.rayleigh.value = 1.2;
+			u.cloudCoverage.value = 0.3;
+		}
 		this.sky.scale.setScalar(1000);
-		this.sky.material.uniforms.turbidity.value = 3;
-		this.sky.material.uniforms.rayleigh.value = 1.2;
-		this.sky.material.uniforms.cloudCoverage.value = 0.25;
 		this.scene.add(this.sky);
 		const ground = new THREE.Mesh(
 			new THREE.PlaneGeometry(800, 800),
-			new THREE.MeshStandardMaterial({ color: 0x75825f, roughness: 1 })
+			new THREE.MeshStandardMaterial({ color: 0x6f7a5c, roughness: 1 })
 		);
 		ground.rotation.x = -Math.PI / 2;
 		ground.position.y = -9;
 		ground.receiveShadow = true;
-		this.scene.add(ground);
+		this.scene.add(ground, surroundings());
 
-		// Indirect light approximation: neutral studio environment, scaled by daylight
-		const pmrem = new THREE.PMREMGenerator(r);
-		this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-		pmrem.dispose();
+		// Reflections and ambient light come from the same sky (see updateEnvironment)
+		this.envSky.scale.setScalar(50);
+		this.envSky.material.uniforms.showSunDisc.value = 0;
+		const envGround = new THREE.Mesh(new THREE.CircleGeometry(40, 32), this.envGround);
+		envGround.rotation.x = -Math.PI / 2;
+		envGround.position.y = -2;
+		this.envScene.add(this.envSky, envGround);
+		this.pmrem = new THREE.PMREMGenerator(r);
+
+		RectAreaLightUniformsLib.init();
+		this.scene.add(this.windowLight, this.bounce);
 
 		this.sun.castShadow = true;
 		this.sun.shadow.mapSize.set(2048, 2048);
@@ -117,16 +168,30 @@ export class PreviewScene {
 		this.lamp.castShadow = true;
 		this.lamp.shadow.mapSize.set(1024, 1024);
 		this.lamp.shadow.radius = 4;
-		this.lamp.shadow.bias = -0.002;
-		this.scene.add(this.lamp);
+		this.lamp.shadow.bias = -0.006;
+		this.lamp.shadow.normalBias = 0.03;
+		this.scene.add(this.lamp, this.floorBounce);
 
-		this.composer = new EffectComposer(r);
+		// HDR pipeline with 4× MSAA: render, ambient occlusion, bloom, tone mapping, vignette
+		this.composer = new EffectComposer(
+			r,
+			new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 })
+		);
 		this.composer.addPass(new RenderPass(this.scene, this.camera));
 		const ao = new GTAOPass(this.scene, this.camera, 1, 1);
-		ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1 });
-		ao.blendIntensity = 0.85;
+		ao.updateGtaoMaterial({ radius: 0.25, distanceExponent: 1.5, thickness: 1, scale: 1 });
+		ao.blendIntensity = 0.7;
 		this.composer.addPass(ao);
+		// The sky shader can produce NaN or huge values at sunset; bloom would smear them
+		// over the whole frame, so they are cleaned up first
+		this.composer.addPass(new ShaderPass(SanitizeShader));
+		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.12, 0.4, 1.6);
+		this.composer.addPass(this.bloom);
 		this.composer.addPass(new OutputPass());
+		const vignette = new ShaderPass(VignetteShader);
+		vignette.uniforms.offset.value = 0.9;
+		vignette.uniforms.darkness.value = 0.85;
+		this.composer.addPass(vignette);
 
 		this.controls = new OrbitControls(this.camera, r.domElement);
 		this.controls.enableDamping = true;
@@ -153,6 +218,8 @@ export class PreviewScene {
 			this.lastTime = now;
 			if (!this.el.offsetParent) return;
 			this.update(dt);
+			this.sky.material.uniforms.time.value += dt * 1000;
+			if (this.envDirty && now - this.envUpdated > 250) this.updateEnvironment(now);
 			this.composer.render();
 		};
 		loop();
@@ -164,6 +231,9 @@ export class PreviewScene {
 		this.controls.dispose();
 		this.walk.dispose();
 		disposeTree(this.scene);
+		disposeTree(this.envScene);
+		this.envTarget?.dispose();
+		this.pmrem.dispose();
 		this.composer.dispose();
 		this.renderer.dispose();
 		this.renderer.domElement.remove();
@@ -174,6 +244,7 @@ export class PreviewScene {
 		const h = this.el.clientHeight || 1;
 		this.renderer.setSize(w, h, false);
 		this.composer.setSize(w, h);
+		this.bloom.resolution.set(w, h);
 		this.camera.aspect = w / h;
 		this.camera.updateProjectionMatrix();
 	}
@@ -185,6 +256,8 @@ export class PreviewScene {
 		disposeTree(this.root);
 		const grp = this.root;
 		const wallMat = mat.plaster();
+		// Both faces cast shadows, so no sunlight leaks along wall joints
+		wallMat.shadowSide = THREE.DoubleSide;
 
 		// Floor and ceiling
 		const floorGeo = new THREE.ShapeGeometry(
@@ -195,36 +268,58 @@ export class PreviewScene {
 		floor.receiveShadow = true;
 		grp.add(floor);
 
-		const ceilGeo = new THREE.ShapeGeometry(
-			new THREE.Shape(g.poly.map((p) => new THREE.Vector2(p[0], p[1])))
+		// Ceiling as a solid slab resting on the walls, so no light leaks along the joint
+		const ceiling = box(
+			grp,
+			[g.W / 2, g.H + 8, (g.L + g.tE - g.tI) / 2],
+			[g.W + 2 * g.tI, 16, g.L + g.tE + g.tI],
+			0,
+			new THREE.MeshStandardMaterial({ color: 0xf7f6f3, roughness: 0.95 })
 		);
-		ceilGeo.rotateX(Math.PI / 2);
-		const ceiling = new THREE.Mesh(ceilGeo, mat.plaster(0xf7f6f3));
-		ceiling.material.side = THREE.DoubleSide;
-		ceiling.position.y = g.H;
-		ceiling.castShadow = ceiling.receiveShadow = true;
-		grp.add(ceiling);
 		this.ceiling = ceiling;
 
-		// Walls with openings
+		// Walls with openings, skirting boards along every wall that reaches the floor
+		const trim = mat.trim();
 		for (const s of buildWalls(g, g.H).segs) {
 			const { S, d, n, t } = s.e;
+			// Pieces above openings overlap their neighbours a little, which hides the seam
+			const lap = s.h0 > 0 ? 0.5 : 0;
 			const um = (s.u0 + s.u1) / 2;
+			const rot = Math.atan2(-d[1], d[0]);
 			box(
 				grp,
 				[S[0] + d[0] * um + (n[0] * t) / 2, (s.h0 + s.h1) / 2, S[1] + d[1] * um + (n[1] * t) / 2],
-				[s.u1 - s.u0, s.h1 - s.h0, t],
-				Math.atan2(-d[1], d[0]),
+				[s.u1 - s.u0 + 2 * lap, s.h1 - s.h0, t],
+				rot,
 				wallMat
 			);
+			if (s.h0 === 0)
+				box(
+					grp,
+					[S[0] + d[0] * um - n[0] * 0.75, 3.5, S[1] + d[1] * um - n[1] * 0.75],
+					[s.u1 - s.u0, 7, 1.5],
+					rot,
+					trim
+				);
 		}
 
 		// Room door, closed, with handle
 		const dr = g.doors[0];
 		const dz = dr.y - g.tI / 2;
 		box(grp, [(dr.x0 + dr.x1) / 2, dr.h / 2, dz], [dr.w, dr.h, 4], 0, mat.doorLeaf());
-		const handleX = dr.hinge[0] === dr.x0 ? dr.x1 - 8 : dr.x0 + 8;
-		box(grp, [handleX, 105, dz + 4], [12, 2, 2], 0, mat.frame());
+		const handleRight = dr.hinge[0] === dr.x0;
+		const handleX = handleRight ? dr.x1 - 8 : dr.x0 + 8;
+		const steel = mat.steel();
+		box(grp, [handleX, 105, dz + 4], [12, 2, 2], 0, steel);
+		box(grp, [handleX + (handleRight ? 5 : -5), 105, dz + 2.5], [3, 16, 1], 0, steel);
+		// Door casing on the room side, and a light switch next to the handle
+		const cz = dr.y + 0.75;
+		for (const x of [dr.x0 - 3.5, dr.x1 + 3.5])
+			box(grp, [x, (dr.h + 7) / 2, cz], [7, dr.h + 7, 1.5], 0, trim);
+		box(grp, [(dr.x0 + dr.x1) / 2, dr.h + 3.5, cz], [dr.w + 14, 7, 1.5], 0, trim);
+		const switchX = handleRight ? dr.x1 + 16 : dr.x0 - 16;
+		if (switchX > 6 && switchX < g.doorWallLen - 6)
+			box(grp, [switchX, 105, dr.y + 0.5], [8, 8, 1], 0, trim);
 
 		// Glass front: panes, closed balcony door, frames
 		const fr = g.front;
@@ -256,14 +351,13 @@ export class PreviewScene {
 			box(grp, [g.W / 2, g.H + 10, ly0 + g.D / 2], [g.W + 2 * g.tI, 20, g.D], 0, wallMat);
 		}
 
-		// Furniture as soft-edged boxes
+		// Furniture models picked by name (bed, sofa, desk, ...)
+		const kit = new MaterialKit();
 		for (const f of furn) {
-			const r = Math.min(2.5, f.w / 4, f.d / 4, f.h / 4);
-			const m = new THREE.Mesh(new RoundedBoxGeometry(f.w, f.h, f.d, 3, r), mat.furniture(f.color));
-			m.position.set(f.cx, f.h / 2, f.cy);
-			m.rotation.y = (-f.rot * Math.PI) / 180;
-			m.castShadow = m.receiveShadow = true;
-			grp.add(m);
+			const piece = buildFurniture(f, kit);
+			piece.position.set(f.cx, 0, f.cy);
+			piece.rotation.y = (-f.rot * Math.PI) / 180;
+			grp.add(piece);
 		}
 
 		// Flush ceiling light in the center of the main room part
@@ -272,7 +366,15 @@ export class PreviewScene {
 		const shade = new THREE.Mesh(new THREE.CylinderGeometry(20, 22, 7, 48), this.lampShade);
 		shade.position.set(lx, g.H - 3.5, lz);
 		grp.add(shade);
+		this.shade = shade;
 		this.lamp.position.set(lx / 100, (g.H - 20) / 100, lz / 100);
+
+		// Daylight panel just inside the glass, shining into the room
+		const wx = (fr.gx0 + fr.gx1) / 200;
+		this.windowLight.width = Math.max(0.1, (fr.gx1 - fr.gx0) / 100);
+		this.windowLight.height = fr.gH / 100;
+		this.windowLight.position.set(wx, fr.gH / 200, g.L / 100 - 0.01);
+		this.windowLight.lookAt(wx, fr.gH / 200, 0);
 
 		this.sun.target.position.set(g.W / 200, 0, g.L / 200);
 		this.setTime(this.hours);
@@ -289,12 +391,60 @@ export class PreviewScene {
 		this.sun.visible = light.intensity > 0.01;
 		this.sun.position.copy(this.sun.target.position).addScaledVector(dir, 15);
 		this.sky.material.uniforms.sunPosition.value.copy(dir);
-		this.scene.environmentIntensity = 0.03 + 0.4 * light.daylight;
+		this.envSky.material.uniforms.sunPosition.value.copy(dir);
+		// The ground only reflects daylight; at night it would glow green otherwise
+		this.envGround.color.setHex(0x4a5040).multiplyScalar(0.03 + 0.97 * light.daylight);
+		this.envDirty = true;
+		this.scene.environmentIntensity = 0.02 + 0.14 * light.daylight;
+
+		// Skylight through the glass: blue-white by day, warm at sunrise and sunset
+		const high = THREE.MathUtils.smoothstep(dir.y, 0, 0.4);
+		this.windowLight.color.setRGB(1, 0.8, 0.62).lerp(new THREE.Color(0.95, 0.97, 1), high);
+		this.windowLight.intensity = 3.2 * light.daylight;
+
+		// The glass front faces east (+z); sunlight only enters while the sun is on that side
+		const g = this.geo;
+		const facing = THREE.MathUtils.smoothstep(dir.z, 0, 0.25);
+		if (g && dir.y > 0.01 && facing > 0) {
+			// Where the beam through the middle of the glass lands on the floor
+			const t = Math.min(g.front.gH / 200 / dir.y, g.L / 100 / Math.max(dir.z, 0.01));
+			// Kept away from walls and floor, so it spreads instead of making hot spots
+			const x = THREE.MathUtils.clamp(g.W / 200 - dir.x * t, 0.9, g.W / 100 - 0.9);
+			const z = THREE.MathUtils.clamp(g.L / 100 - dir.z * t, 0.9, g.L / 100 - 0.9);
+			this.bounce.position.set(x, 0.9, z);
+			this.bounce.color.copy(light.color).multiply(new THREE.Color(1, 0.82, 0.62));
+			this.bounce.intensity = 0.7 * light.intensity * facing;
+		} else {
+			this.bounce.intensity = 0;
+		}
+
+		this.daylight = light.daylight;
+		this.updateBounce();
+	}
+
+	/** Re-renders the sky into the reflection map (throttled, it costs a few ms). */
+	private updateEnvironment(now: number) {
+		this.envDirty = false;
+		this.envUpdated = now;
+		const old = this.envTarget;
+		this.envTarget = this.pmrem.fromScene(this.envScene, 0.02, 0.1, 100);
+		this.scene.environment = this.envTarget.texture;
+		old?.dispose();
 	}
 
 	setLamp(on: boolean) {
+		this.lampOn = on;
 		this.lamp.intensity = on ? 18 : 0;
 		this.lampShade.emissiveIntensity = on ? 2.5 : 0;
+		this.updateBounce();
+	}
+
+	/** Floor bounce and exposure follow daylight and the lamp. */
+	private updateBounce() {
+		this.floorBounce.intensity = 0.45 * this.daylight + (this.lampOn ? 0.12 : 0);
+		// Eyes adapt to the overall brightness: twilight and lamp light still read well
+		const brightness = this.daylight + (this.lampOn ? 0.5 : 0);
+		this.renderer.toneMappingExposure = Math.min(12, 0.9 / Math.max(brightness, 0.01) ** 0.75);
 	}
 
 	/* ---------- Camera ---------- */
@@ -317,10 +467,15 @@ export class PreviewScene {
 		if (notify) this.onModeChange(mode);
 	}
 
-	/** Glides to a shot (orbit mode). */
-	goTo(shot: Shot) {
+	/** Glides to a shot (orbit mode), or jumps there with `instant`. */
+	goTo(shot: Shot, instant = false) {
 		this.setMode('orbit', true);
-		this.startGlide(shot);
+		if (!instant) return this.startGlide(shot);
+		const state = this.shotState(shot);
+		this.glide = null;
+		this.camera.position.copy(state.pos);
+		this.controls.target.copy(state.target);
+		this.camera.lookAt(state.target);
 	}
 
 	startTour(shots: Shot[]) {
@@ -359,8 +514,8 @@ export class PreviewScene {
 			this.controls.update();
 		}
 		// Look into the room from above
-		if (this.ceiling && this.geo)
-			this.ceiling.visible = this.camera.position.y < this.geo.H / 100 + 0.02;
+		if (this.ceiling && this.shade && this.geo)
+			this.ceiling.visible = this.shade.visible = this.camera.position.y < this.geo.H / 100 + 0.02;
 	}
 
 	/** Slow push-in and drift around the target, then glide to the next shot. */
@@ -440,8 +595,59 @@ function disposeTree(obj: THREE.Object3D) {
 		for (const m of mats) {
 			const s = m as THREE.MeshStandardMaterial;
 			s.map?.dispose();
+			s.bumpMap?.dispose();
 			m.dispose();
 		}
 	});
 	if (obj.type !== 'Scene') obj.clear();
+}
+
+/**
+ * Trees and a few distant buildings around the flat (in meters, ground at -9 m), so the view
+ * through the window has depth. Deterministic, so the scenery never jumps between builds.
+ */
+function surroundings() {
+	const grp = new THREE.Group();
+	let seed = 4242;
+	const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+	const leaves = [0x4f6b3a, 0x5d7a44, 0x46613a, 0x6b8048].map(
+		(color) => new THREE.MeshStandardMaterial({ color, roughness: 1 })
+	);
+	const bark = new THREE.MeshStandardMaterial({ color: 0x5a4a3c, roughness: 1 });
+	const blob = new THREE.IcosahedronGeometry(1, 3);
+	const trunk = new THREE.CylinderGeometry(0.15, 0.25, 1, 6);
+	for (let i = 0; i < 70; i++) {
+		const angle = rnd() * Math.PI * 2;
+		const dist = 30 + rnd() * 60;
+		const x = Math.cos(angle) * dist;
+		const z = Math.sin(angle) * dist;
+		const h = 6 + rnd() * 7;
+		const t = new THREE.Mesh(trunk, bark);
+		t.scale.set(1, h * 0.5, 1);
+		t.position.set(x, -9 + h * 0.25, z);
+		grp.add(t);
+		// Crown from a few overlapping blobs
+		const crown = leaves[i % leaves.length];
+		for (let k = 0; k < 4; k++) {
+			const r = h * (0.16 + rnd() * 0.1);
+			const b = new THREE.Mesh(blob, crown);
+			b.scale.set(r, r * (0.8 + rnd() * 0.3), r);
+			b.position.set(x + (rnd() - 0.5) * r, -9 + h * (0.6 + rnd() * 0.25), z + (rnd() - 0.5) * r);
+			grp.add(b);
+		}
+	}
+	const facades = [0xd9d2c5, 0xc9c3b8, 0xe4ddd0, 0xb8b2a8].map(
+		(color) => new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
+	);
+	for (let i = 0; i < 16; i++) {
+		const angle = rnd() * Math.PI * 2;
+		const dist = 75 + rnd() * 60;
+		const w = 14 + rnd() * 20;
+		const h = 10 + rnd() * 16;
+		const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 10 + rnd() * 8), facades[i % 4]);
+		b.position.set(Math.cos(angle) * dist, -9 + h / 2, Math.sin(angle) * dist);
+		b.rotation.y = angle + Math.PI / 2;
+		grp.add(b);
+	}
+	return grp;
 }

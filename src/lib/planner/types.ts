@@ -1,3 +1,5 @@
+import type { Kind } from './catalog';
+
 export type Hinge = 'left' | 'right';
 export type Swing = 'in' | 'out';
 
@@ -41,6 +43,8 @@ export interface Furniture {
 	rot: number;
 	/** Index into the furniture palette */
 	color: number;
+	/** Type for icon and preview model; guessed from the name when missing */
+	kind?: Kind;
 }
 
 export interface PlannerData {
@@ -50,4 +54,3 @@ export interface PlannerData {
 }
 
 export type Point = [number, number];
-export type View = '3d' | 'plan' | 'preview';
