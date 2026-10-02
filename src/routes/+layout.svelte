@@ -1,6 +1,6 @@
 <script lang="ts">
 	import './layout.css';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, onNavigate } from '$app/navigation';
 	import favicon from '#lib/assets/favicon.svg';
 	import Header from '#lib/components/Header.svelte';
 	import { planner } from '#lib/planner/planner.svelte.ts';
@@ -19,6 +19,18 @@
 		params.delete('item');
 		const query = params.size ? `?${params}` : '';
 		saveStep(to.url.pathname + query);
+	});
+
+	// Moving between steps cross-fades the pages (View Transitions API, where supported).
+	// Query-only changes (selection, view, focus) stay instant.
+	onNavigate((nav) => {
+		if (!document.startViewTransition || nav.from?.url.pathname === nav.to?.url.pathname) return;
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await nav.complete;
+			});
+		});
 	});
 
 	/** Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y work everywhere except inside form fields. */

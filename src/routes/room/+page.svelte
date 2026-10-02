@@ -6,6 +6,7 @@
 	import RoomSettings from '#lib/components/RoomSettings.svelte';
 	import Workspace from '#lib/components/Workspace.svelte';
 	import FloatingBar from '#lib/components/ui/FloatingBar.svelte';
+	import HelpButton from '#lib/components/ui/HelpButton.svelte';
 	import IconButton from '#lib/components/ui/IconButton.svelte';
 	import { m2 } from '#lib/planner/format.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
@@ -44,6 +45,16 @@
 				label="All dimensions"
 				pressed={showDims}
 				onclick={() => (showDims = !showDims)}
+			/>
+			<HelpButton
+				up
+				tips={[
+					['Drag a grip', 'Move walls, doors, the glass edges or the loggia'],
+					['Shift', 'Snap to 10 cm while dragging'],
+					['Tap a value', 'Type an exact measurement'],
+					['Drag a value', 'Adjust it sideways; arrow keys work too'],
+					['Ctrl Z', 'Undo (Ctrl Shift Z redo)']
+				]}
 			/>
 		</FloatingBar>
 	{/snippet}

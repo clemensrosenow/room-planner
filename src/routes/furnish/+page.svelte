@@ -8,11 +8,14 @@
 	import SelectionToolbar from '#lib/components/SelectionToolbar.svelte';
 	import Workspace from '#lib/components/Workspace.svelte';
 	import FloatingBar from '#lib/components/ui/FloatingBar.svelte';
+	import HelpButton from '#lib/components/ui/HelpButton.svelte';
 	import IconButton from '#lib/components/ui/IconButton.svelte';
 	import Segmented from '#lib/components/ui/Segmented.svelte';
 	import { normalizeAngle } from '#lib/planner/furniture.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { selectItem, setParams } from '#lib/url.ts';
+	import { duration } from '#lib/motion.ts';
+	import { fly, scale } from 'svelte/transition';
 
 	let lowWalls = $state(false);
 	let showDims = $state(false);
@@ -136,6 +139,7 @@
 		{#if planner.selected && anchor}
 			<!-- Quick actions float above the selected piece, kept inside the view -->
 			<div
+				transition:scale={{ start: 0.92, duration: duration(140) }}
 				class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full"
 				style:left="{Math.min(Math.max(anchor.x, 170), canvasW - 170)}px"
 				style:top="{Math.min(Math.max(anchor.y - 14, 150), canvasH - 110)}px"
@@ -178,13 +182,22 @@
 				pressed={listOpen}
 				onclick={() => (listOpen = !listOpen)}
 			/>
-			<IconButton
-				icon="help"
-				label="Drag to move (Alt: no snapping) · arrow keys 1 cm, Shift 10 cm · R rotates · Delete removes · double-click for details · Esc deselects"
+			<HelpButton
+				tips={[
+					['Drag', 'Move a piece; it snaps to walls and furniture (Alt: free)'],
+					['Arrow keys', 'Nudge 1 cm, with Shift 10 cm'],
+					['R', 'Rotate 90°'],
+					['Delete', 'Remove the selected piece'],
+					['Double-click', 'Exact sizes and details'],
+					['Esc', 'Close details, then deselect'],
+					['Ctrl Z', 'Undo (Ctrl Shift Z redo)']
+				]}
 			/>
 		</FloatingBar>
 		{#if listOpen}
-			<PieceList onpick={() => (listOpen = false)} />
+			<div transition:fly={{ y: -8, duration: duration(160) }}>
+				<PieceList onpick={() => (listOpen = false)} />
+			</div>
 		{/if}
 	</div>
 

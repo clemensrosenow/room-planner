@@ -147,3 +147,28 @@
 	background: var(--sheet);
 	border: 2px solid var(--ink);
 }
+
+/* Step changes: the old page fades out, the new one settles in */
+::view-transition-old(root) {
+	animation: 160ms ease-in both step-out;
+}
+::view-transition-new(root) {
+	animation: 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both step-in;
+}
+@keyframes step-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes step-in {
+	from {
+		opacity: 0;
+		transform: scale(0.985);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-old(root),
+	::view-transition-new(root) {
+		animation: none;
+	}
+}

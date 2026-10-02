@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { duration, isNarrow } from '#lib/motion.ts';
 	import type { Snippet } from 'svelte';
+	import { fly } from 'svelte/transition';
 	import Icon from './ui/Icon.svelte';
 
 	interface Props {
@@ -53,6 +55,11 @@
 		<aside
 			class="relative z-10 flex max-h-[45dvh] flex-none flex-col rounded-t-3xl bg-sheet shadow-float ring-1 ring-line/70 md:absolute md:top-20 md:right-4 md:bottom-4 md:max-h-none md:w-[360px] md:rounded-3xl"
 			aria-label={title}
+			transition:fly={{
+				x: isNarrow() ? 0 : 24,
+				y: isNarrow() ? 40 : 0,
+				duration: duration(220)
+			}}
 		>
 			<header class="flex items-baseline gap-2 px-5 pt-4 pb-3">
 				<h2 class="text-[17px] font-bold tracking-tight">{title}</h2>

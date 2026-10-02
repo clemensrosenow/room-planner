@@ -6,7 +6,10 @@
 	import IconButton from './ui/IconButton.svelte';
 </script>
 
-<header class="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-16 items-center gap-3 px-4">
+<!-- Named view transition: the header stays put while the pages cross-fade -->
+<header
+	class="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-16 items-center gap-3 px-4 [view-transition-name:header]"
+>
 	<span class="flex-1 text-[15px] font-bold tracking-tight max-sm:hidden">Room Planner</span>
 
 	<nav aria-label="Steps" class="max-sm:flex-1">

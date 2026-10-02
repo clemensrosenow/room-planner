@@ -7,6 +7,8 @@
 	import FloatingBar from './ui/FloatingBar.svelte';
 	import Icon from './ui/Icon.svelte';
 	import IconButton from './ui/IconButton.svelte';
+	import { duration } from '#lib/motion.ts';
+	import { scale } from 'svelte/transition';
 
 	/** Quick actions floating above the selected piece. */
 	interface Props {
@@ -40,6 +42,7 @@
 <div class="flex flex-col items-center gap-1.5">
 	{#if colors}
 		<div
+			transition:scale={{ start: 0.9, duration: duration(120) }}
 			class="pointer-events-auto flex gap-1.5 rounded-full bg-sheet/95 p-1.5 shadow-float ring-1 ring-line/70"
 			role="group"
 			aria-label="Color"
