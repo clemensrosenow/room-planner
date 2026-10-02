@@ -19,10 +19,7 @@
 		try {
 			scene = new RoomScene(container, {
 				onSelect: (id) => planner.select(id),
-				onDrag: (id, cx, cy) => {
-					const f = planner.furn.find((x) => x.id === id);
-					if (f) Object.assign(f, { cx, cy });
-				}
+				onDrag: (id, cx, cy, snap) => planner.move(id, cx, cy, snap)
 			});
 		} catch {
 			failed = true;

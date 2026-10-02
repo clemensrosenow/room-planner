@@ -1,6 +1,6 @@
 import { DEFAULT_CFG } from './defaults';
 import { newId } from './format';
-import { checkFurniture, normalizeAngle, type FurnitureCheck } from './furniture';
+import { checkFurniture, moveTo, normalizeAngle, type FurnitureCheck } from './furniture';
 import { computeGeometry } from './geometry';
 import { clone, loadData, loadView, saveData, saveView } from './storage';
 import type { Furniture, View } from './types';
@@ -78,6 +78,12 @@ class Planner {
 	remove(f: Furniture) {
 		this.furn = this.furn.filter((x) => x.id !== f.id);
 		if (this.selectedId === f.id) this.selectedId = null;
+	}
+
+	/** Drag move; snaps to walls and other pieces unless `snap` is false. */
+	move(id: string, cx: number, cy: number, snap: boolean) {
+		const f = this.furn.find((x) => x.id === id);
+		if (f) moveTo(f, cx, cy, this.furn, this.geo, snap);
 	}
 
 	rotate(f: Furniture, deg: number) {

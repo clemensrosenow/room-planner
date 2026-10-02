@@ -137,8 +137,7 @@
 	function onpointermove(e: PointerEvent) {
 		if (!drag) return;
 		const [x, y] = toPlan(e);
-		drag.f.cx = Math.round(drag.cx + x - drag.x);
-		drag.f.cy = Math.round(drag.cy + y - drag.y);
+		planner.move(drag.f.id, drag.cx + x - drag.x, drag.cy + y - drag.y, !e.altKey);
 	}
 
 	const onpointerup = () => (drag = null);

@@ -9,8 +9,8 @@ import type { Furniture, Point } from './types';
 export interface SceneEvents {
 	/** Pointer went down on a piece (start of a drag) */
 	onSelect: (id: string | null) => void;
-	/** Piece dragged to a new center */
-	onDrag: (id: string, cx: number, cy: number) => void;
+	/** Piece dragged to a new center; `snap` is false while Alt is held */
+	onDrag: (id: string, cx: number, cy: number, snap: boolean) => void;
 }
 
 const color = (v: string) => new THREE.Color(cssVar(v));
@@ -389,7 +389,7 @@ export class RoomScene {
 			if (!drag) return;
 			aim(e);
 			if (!ray.ray.intersectPlane(floor, hit)) return;
-			this.events.onDrag(drag.id, Math.round(hit.x + drag.ox), Math.round(hit.z + drag.oz));
+			this.events.onDrag(drag.id, hit.x + drag.ox, hit.z + drag.oz, !e.altKey);
 		});
 
 		const end = (e: PointerEvent | null) => {

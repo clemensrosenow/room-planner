@@ -71,7 +71,7 @@
 				</button>
 			{/if}
 			<span class="ml-auto text-xs text-muted max-[900px]:hidden">
-				Drag furniture · arrow keys 1 cm (⇧ 10 cm) · R rotates 90°
+				Drag furniture (Alt: no snapping) · arrow keys 1 cm (⇧ 10 cm) · R rotates 90°
 			</span>
 		</div>
 		<div

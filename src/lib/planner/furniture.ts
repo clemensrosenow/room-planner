@@ -109,3 +109,40 @@ export function setPosition(f: Furniture, axis: 'x' | 'y', value: number) {
 	if (axis === 'x') f.cx += value - b.minX;
 	else f.cy += value - b.minY;
 }
+
+/** Snap distance in cm while dragging. */
+const SNAP = 5;
+
+/**
+ * Moves the piece's center to (cx, cy). With `snap`, edges within a few cm of a wall
+ * or another piece's edge are pulled flush to it.
+ */
+export function moveTo(
+	f: Furniture,
+	cx: number,
+	cy: number,
+	others: Furniture[],
+	g: Geometry,
+	snap: boolean
+) {
+	f.cx = Math.round(cx);
+	f.cy = Math.round(cy);
+	if (!snap) return;
+	const b = bbox(f);
+	const rest = others.filter((o) => o !== f).map(bbox);
+	const xs = [0, g.W, ...(g.hasNotch ? [g.NW] : []), ...rest.flatMap((o) => [o.minX, o.maxX])];
+	const ys = [0, g.L, ...(g.hasNotch ? [g.N] : []), ...rest.flatMap((o) => [o.minY, o.maxY])];
+	f.cx += nearestOffset([b.minX, b.maxX], xs);
+	f.cy += nearestOffset([b.minY, b.maxY], ys);
+}
+
+/** Smallest shift (within SNAP) that puts one of `edges` onto one of `lines`, else 0. */
+function nearestOffset(edges: number[], lines: number[]) {
+	let best = 0;
+	for (const e of edges)
+		for (const l of lines) {
+			const d = l - e;
+			if (Math.abs(d) <= SNAP && (best === 0 || Math.abs(d) < Math.abs(best))) best = d;
+		}
+	return best;
+}
