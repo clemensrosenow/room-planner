@@ -90,6 +90,16 @@ export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): Fur
 	return { out, doors, overlap, bad: out || doors.length > 0 || overlap.length > 0 };
 }
 
+/** Problems in plain words, e.g. ["Blocks the room door", "Overlaps Desk"]. */
+export function describeCheck(c: FurnitureCheck | undefined): string[] {
+	if (!c) return [];
+	return [
+		...(c.out ? ['Sticks out of the room'] : []),
+		...c.doors.map((d) => `Blocks the ${d}`),
+		...c.overlap.map((n) => `Overlaps ${n}`)
+	];
+}
+
 /* ---------- Edits (mutate the piece in place) ---------- */
 
 export const normalizeAngle = (deg: number) => ((deg % 360) + 360) % 360;

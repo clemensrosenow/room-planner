@@ -1,4 +1,5 @@
-import { DEFAULT_CFG, PRESETS, type Preset } from './defaults';
+import { CATALOG, type Preset } from './catalog';
+import { DEFAULT_CFG } from './defaults';
 import { newId } from './format';
 import { checkFurniture, moveTo, normalizeAngle, type FurnitureCheck } from './furniture';
 import { computeGeometry } from './geometry';
@@ -92,24 +93,28 @@ class Planner {
 		this.canRedo = this.future.length > 0;
 	}
 
-	/** Adds a piece in the middle of the room; numbered if the name is taken. */
-	add(preset: Preset = PRESETS[0]): Furniture {
+	/**
+	 * Adds a piece at `at` (plan cm) or in the middle of the room; numbered if the name is
+	 * taken. Returns the reactive piece.
+	 */
+	add(preset: Preset = CATALOG[CATALOG.length - 1], at?: [number, number]): Furniture {
 		const g = this.geo;
 		let name = preset.name;
 		for (let i = 2; this.furn.some((x) => x.name === name); i++) name = `${preset.name} ${i}`;
 		const f: Furniture = {
 			id: newId(),
 			name,
+			kind: preset.kind,
 			w: preset.w,
 			d: preset.d,
 			h: preset.h,
-			cx: Math.round(g.W / 2),
-			cy: Math.round(g.hasNotch ? (g.N + g.L) / 2 : g.L / 2),
+			cx: Math.round(at?.[0] ?? g.W / 2),
+			cy: Math.round(at?.[1] ?? (g.hasNotch ? (g.N + g.L) / 2 : g.L / 2)),
 			rot: 0,
 			color: preset.color
 		};
 		this.furn.push(f);
-		return f;
+		return this.furn[this.furn.length - 1];
 	}
 
 	duplicate(f: Furniture): Furniture {
@@ -121,7 +126,7 @@ class Planner {
 			cy: f.cy + 20
 		};
 		this.furn.push(copy);
-		return copy;
+		return this.furn[this.furn.length - 1];
 	}
 
 	remove(f: Furniture) {

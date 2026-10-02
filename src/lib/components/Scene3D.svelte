@@ -1,10 +1,20 @@
 <script lang="ts">
 	import { planner } from '#lib/planner/planner.svelte.ts';
-	import { selectItem } from '#lib/url.ts';
 	import { RoomScene } from '#lib/planner/scene3d.ts';
+	import type { Point } from '#lib/planner/types.ts';
+	import { selectItem } from '#lib/url.ts';
 	import { onMount, untrack } from 'svelte';
 
-	let { lowWalls }: { lowWalls: boolean } = $props();
+	interface Props {
+		lowWalls: boolean;
+		/** Wall lengths and labels */
+		showDims?: boolean;
+		/** Double-click on a piece */
+		onopen?: (id: string) => void;
+		/** Screen position above the selected piece (px within this view) */
+		onanchor?: (p: { x: number; y: number } | null) => void;
+	}
+	let { lowWalls, showDims = false, onopen, onanchor }: Props = $props();
 
 	let container: HTMLDivElement;
 	let scene = $state<RoomScene | null>(null);
@@ -16,11 +26,18 @@
 		scene?.fitCamera(planner.geo);
 	}
 
+	/** Floor point (plan cm) under a screen point, or null outside the view. */
+	export function planPoint(clientX: number, clientY: number): Point | null {
+		return scene?.planPoint(clientX, clientY) ?? null;
+	}
+
 	onMount(() => {
 		try {
 			scene = new RoomScene(container, {
 				onSelect: (id) => selectItem(id),
-				onDrag: (id, cx, cy, snap) => planner.move(id, cx, cy, snap)
+				onDrag: (id, cx, cy, snap) => planner.move(id, cx, cy, snap),
+				onOpen: (id) => onopen?.(id),
+				onAnchor: (p) => onanchor?.(p)
 			});
 		} catch {
 			failed = true;
@@ -40,7 +57,8 @@
 
 	$effect(() => {
 		void styleVersion;
-		scene?.setRoom(planner.geo, lowWalls);
+		scene?.setRoom(planner.geo, lowWalls, showDims);
+		untrack(() => scene?.setBlockedDoors(blockedDoors()));
 	});
 
 	// Full rebuild only when something other than the position changes
@@ -56,6 +74,10 @@
 		void planner.furn.map((f) => [f.cx, f.cy, f.rot]);
 		scene?.setPositions(planner.furn);
 	});
+
+	/** Doors whose swing area any piece blocks */
+	const blockedDoors = () => Object.values(planner.checks).flatMap((c) => c.doors);
+	$effect(() => scene?.setBlockedDoors(blockedDoors()));
 </script>
 
 <div bind:this={container} class="h-full w-full">

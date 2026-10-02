@@ -12,10 +12,20 @@
 		sub?: string;
 		/** Let the canvas run under the header too */
 		fullBleed?: boolean;
+		/** Shows a close button on the panel */
+		onclose?: () => void;
 		/** The canvas (3D, plan or preview) */
 		children: Snippet;
 	}
-	let { controls, panel, title = '', sub = '', fullBleed = false, children }: Props = $props();
+	let {
+		controls,
+		panel,
+		title = '',
+		sub = '',
+		fullBleed = false,
+		onclose,
+		children
+	}: Props = $props();
 
 	/** Mobile only: the sheet can shrink to its title */
 	let collapsed = $state(false);
@@ -46,15 +56,26 @@
 		>
 			<header class="flex items-baseline gap-2 px-5 pt-4 pb-3">
 				<h2 class="text-[17px] font-bold tracking-tight">{title}</h2>
-				<span class="text-[13px] text-muted">{sub}</span>
-				<button
-					class="ml-auto grid size-8 cursor-pointer place-items-center self-center rounded-full text-muted hover:bg-paper md:hidden"
-					aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
-					aria-expanded={!collapsed}
-					onclick={() => (collapsed = !collapsed)}
-				>
-					<Icon name={collapsed ? 'chevron-up' : 'chevron-down'} />
-				</button>
+				<span class="min-w-0 truncate text-[13px] text-muted">{sub}</span>
+				<div class="ml-auto flex flex-none gap-1 self-center">
+					<button
+						class="grid size-8 cursor-pointer place-items-center rounded-full text-muted hover:bg-paper md:hidden"
+						aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+						aria-expanded={!collapsed}
+						onclick={() => (collapsed = !collapsed)}
+					>
+						<Icon name={collapsed ? 'chevron-up' : 'chevron-down'} />
+					</button>
+					{#if onclose}
+						<button
+							class="grid size-8 cursor-pointer place-items-center rounded-full text-muted hover:bg-paper"
+							aria-label="Close panel"
+							onclick={onclose}
+						>
+							<Icon name="close" />
+						</button>
+					{/if}
+				</div>
 			</header>
 			<div class={['min-h-0 flex-1 overflow-y-auto px-5 pb-5', collapsed && 'max-md:hidden']}>
 				{@render panel()}

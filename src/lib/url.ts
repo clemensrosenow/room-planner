@@ -36,5 +36,6 @@ export function selectItem(id: string | null) {
 		return;
 	}
 	if (current === null) return setParams({ item: id }, { state: { selectionPushed: true } });
-	return setParams({ item: id }, { replace: true });
+	// Deselecting also closes the details panel
+	return setParams({ item: id, ...(id === null && { details: null }) }, { replace: true });
 }

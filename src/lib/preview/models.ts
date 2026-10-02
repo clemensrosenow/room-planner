@@ -1,28 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { furnitureKind } from '../planner/catalog';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
-
-/**
- * Parametric furniture for the realistic preview. Every model fills the piece's
- * width × depth × height box (cm). Origin is the floor center, x is width, z is depth
- * with the front at +z, y is up.
- */
-export type Kind = 'bed' | 'desk' | 'chair' | 'wardrobe' | 'sofa' | 'shelf' | 'nightstand' | 'box';
-
-/** Model by name (English and German), first match wins. */
-const KINDS: [Kind, RegExp][] = [
-	['nightstand', /night|bedside|nacht/i],
-	['wardrobe', /wardrobe|closet|cabinet|dresser|schrank|kommode/i],
-	['shelf', /shelf|book|regal|rack/i],
-	['sofa', /sofa|couch|sessel|armchair/i],
-	['chair', /chair|stool|stuhl|hocker/i],
-	['bed', /bed|bett/i],
-	['desk', /desk|table|tisch/i]
-];
-
-export const furnitureKind = (name: string): Kind =>
-	KINDS.find(([, re]) => re.test(name))?.[0] ?? 'box';
 
 /** Shared materials for one build, so a room with many books stays cheap. */
 export class MaterialKit {
@@ -48,6 +28,11 @@ export class MaterialKit {
 		});
 }
 
+/**
+ * Parametric furniture for the realistic preview. Every model fills the piece's
+ * width × depth × height box (cm). Origin is the floor center, x is width, z is depth
+ * with the front at +z, y is up.
+ */
 export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 	const g = new THREE.Group();
 	const w = Math.max(2, f.w);
@@ -74,7 +59,7 @@ export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 				add(material, [size, height, size], [sx * (w / 2 - inset), 0, sz * (d / 2 - inset)]);
 	};
 
-	switch (furnitureKind(f.name)) {
+	switch (furnitureKind(f)) {
 		case 'bed': {
 			const legH = Math.min(8, h * 0.2);
 			const mattressH = Math.min(22, h * 0.45);

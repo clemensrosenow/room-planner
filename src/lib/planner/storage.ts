@@ -1,3 +1,4 @@
+import { isKind } from './catalog';
 import { DEFAULT_CFG, DEFAULT_FURN } from './defaults';
 import { newId } from './format';
 import type { Furniture, PlannerData, RoomConfig } from './types';
@@ -35,7 +36,8 @@ function normalizeFurniture(arr: unknown): Furniture[] {
 			cx: num(f.cx, 175),
 			cy: num(f.cy, 300),
 			rot: num(f.rot, 0),
-			color: Math.abs(Math.round(num(f.color, 0))) % 5
+			color: Math.abs(Math.round(num(f.color, 0))) % 5,
+			...(isKind(f.kind) && { kind: f.kind })
 		}));
 }
 
