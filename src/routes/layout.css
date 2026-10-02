@@ -112,3 +112,38 @@
 		@apply w-full rounded-xl border border-transparent bg-paper px-3 py-2 text-[14px] transition-colors focus:border-accent focus:outline-none;
 	}
 }
+
+/* Time-of-day slider; the track gradient (--day) comes from the sun path, see dayGradient() */
+.time-range {
+	appearance: none;
+	height: 28px;
+	background: transparent;
+	cursor: pointer;
+}
+.time-range::-webkit-slider-runnable-track {
+	height: 6px;
+	border-radius: 9999px;
+	background: var(--day);
+}
+.time-range::-moz-range-track {
+	height: 6px;
+	border-radius: 9999px;
+	background: var(--day);
+}
+.time-range::-webkit-slider-thumb {
+	appearance: none;
+	width: 18px;
+	height: 18px;
+	margin-top: -6px;
+	border-radius: 9999px;
+	background: var(--sheet);
+	border: 2px solid var(--ink);
+	box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+.time-range::-moz-range-thumb {
+	width: 14px;
+	height: 14px;
+	border-radius: 9999px;
+	background: var(--sheet);
+	border: 2px solid var(--ink);
+}

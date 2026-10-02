@@ -83,8 +83,31 @@ export function woodFloor() {
 	return new THREE.MeshStandardMaterial({ map, roughness: 0.55, metalness: 0 });
 }
 
-export const plaster = (color = 0xf1eee8) =>
-	new THREE.MeshStandardMaterial({ color, roughness: 0.95 });
+/** Soft surface noise shared by plaster, fabric and lacquer bump maps. */
+let grain: THREE.Texture | null = null;
+const surfaceGrain = () => (grain ??= texture(noise(256, 128, 60, 5), false));
+
+/** Low-frequency blotches (smoothly upscaled noise), safe from moiré at grazing angles. */
+let blotches: THREE.Texture | null = null;
+function softGrain() {
+	if (blotches) return blotches;
+	const small = noise(48, 128, 90, 23);
+	blotches = texture(
+		canvas(256, (x) => {
+			x.imageSmoothingQuality = 'high';
+			x.drawImage(small, 0, 0, 256, 256);
+		}),
+		false
+	);
+	return blotches;
+}
+
+/** Matte wall paint with a faint, uneven roller texture. */
+export function plaster(color = 0xf2efe9) {
+	const bumpMap = softGrain().clone();
+	bumpMap.repeat.set(1 / 60, 1 / 60);
+	return new THREE.MeshStandardMaterial({ color, roughness: 0.93, bumpMap, bumpScale: 0.04 });
+}
 
 export function concrete() {
 	const map = texture(noise(256, 170, 40, 11));
@@ -92,31 +115,100 @@ export function concrete() {
 	return new THREE.MeshStandardMaterial({ map, roughness: 0.9 });
 }
 
+/** Window glass: almost invisible, but reflects the sky at grazing angles. */
 export const glass = () =>
 	new THREE.MeshPhysicalMaterial({
-		color: 0xdfeef5,
+		color: 0xeef6f8,
 		transparent: true,
-		opacity: 0.12,
-		roughness: 0.02,
+		opacity: 0.08,
+		roughness: 0,
 		metalness: 0,
+		ior: 1.5,
+		specularIntensity: 1,
+		envMapIntensity: 1.5,
 		depthWrite: false
 	});
 
+/** Powder-coated aluminium window frames. */
 export const frame = () =>
-	new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.45, metalness: 0.3 });
+	new THREE.MeshStandardMaterial({ color: 0x3b3e42, roughness: 0.5, metalness: 0.4 });
 
-export const doorLeaf = () => new THREE.MeshStandardMaterial({ color: 0xf6f5f1, roughness: 0.45 });
+export const doorLeaf = () => new THREE.MeshStandardMaterial({ color: 0xf6f5f1, roughness: 0.4 });
+
+/** Satin white trim for skirting boards, door casings and switch plates. */
+export const trim = () => new THREE.MeshStandardMaterial({ color: 0xf8f7f4, roughness: 0.45 });
+
+export const steel = () =>
+	new THREE.MeshStandardMaterial({ color: 0xb9bcbf, roughness: 0.3, metalness: 1 });
 
 /** Furniture colors matching the planner palette (light theme). */
-const FURNITURE = [0xc49f72, 0x86a1c2, 0x90b18f, 0xc69292, 0xa99ac4];
-let fabric: THREE.Texture | null = null;
+export const FURNITURE_COLORS = [0xd8b48e, 0xa3b6c9, 0xadc4a4, 0xd9a797, 0xbaabcb];
 
-export function furniture(color: number) {
-	fabric ??= texture(noise(128, 128, 50, 5), false);
+/** Light oak with long grain, for tabletops, frames and legs. The texture covers 120 cm. */
+export function oak() {
+	const rnd = random(19);
+	const size = 512;
+	const c = canvas(size, (x) => {
+		x.fillStyle = 'rgb(196,160,118)';
+		x.fillRect(0, 0, size, size);
+		for (let i = 0; i < 90; i++) {
+			x.strokeStyle = `rgba(120,80,40,${0.04 + rnd() * 0.1})`;
+			x.lineWidth = 0.5 + rnd() * 2;
+			const y = rnd() * size;
+			x.beginPath();
+			x.moveTo(0, y);
+			x.bezierCurveTo(
+				size / 3,
+				y + (rnd() - 0.5) * 14,
+				(2 * size) / 3,
+				y + (rnd() - 0.5) * 14,
+				size,
+				y
+			);
+			x.stroke();
+		}
+	});
+	const map = texture(c);
+	map.repeat.set(1 / 120, 1 / 120);
+	return new THREE.MeshStandardMaterial({ map, roughness: 0.5 });
+}
+
+/** Woven upholstery in one of the palette colors. */
+export function fabric(color: number) {
+	const bumpMap = surfaceGrain().clone();
+	bumpMap.repeat.set(1 / 6, 1 / 6);
+	return new THREE.MeshPhysicalMaterial({
+		color: FURNITURE_COLORS[color % FURNITURE_COLORS.length],
+		roughness: 0.95,
+		bumpMap,
+		bumpScale: 0.4,
+		// Soft rim light on fibres, the key look of upholstery
+		sheen: 0.6,
+		sheenRoughness: 0.7,
+		sheenColor: new THREE.Color(0xffffff)
+	});
+}
+
+/** Satin painted wood (cabinet fronts) in one of the palette colors. */
+export const lacquer = (color: number) =>
+	new THREE.MeshStandardMaterial({
+		color: FURNITURE_COLORS[color % FURNITURE_COLORS.length],
+		roughness: 0.42
+	});
+
+/** White bed linen. */
+export function linen() {
+	const bumpMap = surfaceGrain().clone();
+	bumpMap.repeat.set(1 / 8, 1 / 8);
 	return new THREE.MeshStandardMaterial({
-		color: FURNITURE[color % FURNITURE.length],
-		roughness: 0.8,
-		bumpMap: fabric,
+		color: 0xf4f1ea,
+		roughness: 0.97,
+		bumpMap,
 		bumpScale: 0.3
 	});
 }
+
+/** Book spines in muted colors. */
+export const BOOK_COLORS = [
+	0x6b4f3a, 0x8c3b2e, 0x2f4a5a, 0x5d6b4a, 0xc9b48a, 0x3d3a36, 0xa86a3c, 0xe2ddd2
+];

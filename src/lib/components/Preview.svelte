@@ -1,9 +1,27 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { PreviewScene, type CameraMode } from '#lib/preview/PreviewScene.ts';
 	import { makeShots } from '#lib/preview/shots.ts';
-	import { formatTime } from '#lib/preview/sun.ts';
-	import { onMount } from 'svelte';
+	import { dayGradient, dayOfYear, formatTime, sunDirection } from '#lib/preview/sun.ts';
+	import { setParams } from '#lib/url.ts';
+	import { onMount, untrack } from 'svelte';
+	import FloatingBar from './ui/FloatingBar.svelte';
+	import Icon from './ui/Icon.svelte';
+	import IconButton from './ui/IconButton.svelte';
+
+	const DEFAULT_TIME = 10;
+
+	/** "18h30" (or "18:30") → 18.5, clamped to the slider range */
+	function parseTime(v: string | null) {
+		const m = v?.match(/^(\d{1,2})[h:](\d{2})$/);
+		if (!m) return DEFAULT_TIME;
+		return Math.min(21.5, Math.max(5, Number(m[1]) + Number(m[2]) / 60));
+	}
+
+	// The URL (?shot=, ?time=18h30, ?lamp=1, ?mode=tour|walk) sets the starting state
+	const params = page.url.searchParams;
+	const startMode = params.get('mode');
 
 	let wrap: HTMLDivElement;
 	let container: HTMLDivElement;
@@ -11,11 +29,15 @@
 	let failed = $state(false);
 
 	let mode = $state<CameraMode>('orbit');
-	let activeShot = $state('door');
-	let hours = $state(9);
-	let lamp = $state(false);
+	let activeShot = $state(params.get('shot') ?? 'door');
+	let hours = $state(parseTime(params.get('time')));
+	let lamp = $state(params.get('lamp') === '1');
 
 	const shots = $derived(makeShots(planner.geo));
+	const corners = $derived(shots.filter((s) => s.id.startsWith('corner')));
+	const isDay = $derived(sunDirection(hours, dayOfYear()).y > -0.03);
+	/** Slider track colored by today's real sun path */
+	const track = dayGradient();
 
 	onMount(() => {
 		try {
@@ -24,32 +46,47 @@
 			failed = true;
 			return;
 		}
-		scene.onModeChange = (m) => {
-			mode = m;
-			if (m !== 'tour') activeShot = '';
-		};
+		scene.onModeChange = (m) => (mode = m);
 		return () => scene?.dispose();
 	});
 
-	// Rebuild when the room or furniture changes; start at the door
+	// Rebuild when the room or furniture changes; the first build places the camera
 	let placed = false;
 	$effect(() => {
 		const s = scene;
 		if (!s) return;
 		s.build(planner.geo, $state.snapshot(planner.furn));
-		if (!placed) {
-			placed = true;
-			s.goTo(shots[0]);
-		}
+		if (placed) return;
+		placed = true;
+		// Untracked: picking a shot or mode later must not rebuild the scene
+		untrack(() => {
+			const start = shots.find((sh) => sh.id === activeShot) ?? shots[0];
+			s.goTo(start, true);
+			activeShot = start.id;
+			if (startMode === 'tour') toggleTour();
+			else if (startMode === 'walk') toggleWalk();
+		});
 	});
 	$effect(() => scene?.setTime(hours));
 	$effect(() => scene?.setLamp(lamp));
 
+	// Mirror the state into the URL (debounced, the slider changes it quickly)
+	$effect(() => {
+		const next = {
+			shot: activeShot !== 'door' ? activeShot : null,
+			time: hours !== DEFAULT_TIME ? formatTime(hours).replace(':', 'h') : null,
+			lamp: lamp ? 1 : null,
+			mode: mode !== 'orbit' ? mode : null
+		};
+		const timer = setTimeout(() => setParams(next, { replace: true }), 300);
+		return () => clearTimeout(timer);
+	});
+
 	function goTo(id: string) {
 		const shot = shots.find((s) => s.id === id);
 		if (!shot || !scene) return;
-		activeShot = id;
 		scene.goTo(shot);
+		activeShot = id;
 		mode = 'orbit';
 	}
 
@@ -82,15 +119,36 @@
 		else wrap.requestFullscreen?.();
 	}
 
+	/* During the tour the controls fade out until the pointer moves */
+	let idle = $state(false);
+	let idleTimer: ReturnType<typeof setTimeout>;
+	function wake() {
+		idle = false;
+		clearTimeout(idleTimer);
+		idleTimer = setTimeout(() => (idle = true), 2500);
+	}
+	$effect(() => () => clearTimeout(idleTimer));
+	const hideUi = $derived(mode === 'tour' && idle);
+
 	const pad: [string, string, string][] = [
-		['arrowup', '▲', 'col-start-2'],
-		['arrowleft', '◀', 'col-start-1 row-start-2'],
-		['arrowdown', '▼', 'col-start-2 row-start-2'],
-		['arrowright', '▶', 'col-start-3 row-start-2']
+		['arrowup', 'chevron-up', 'col-start-2'],
+		['arrowleft', 'chevron-left', 'col-start-1 row-start-2'],
+		['arrowdown', 'chevron-down', 'col-start-2 row-start-2'],
+		['arrowright', 'chevron-right', 'col-start-3 row-start-2']
+	];
+
+	const chip = (active: boolean) => [
+		'flex-none cursor-pointer rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors',
+		active ? 'bg-ink text-sheet' : 'text-muted hover:text-ink'
 	];
 </script>
 
-<div bind:this={wrap} class="relative h-full w-full bg-black">
+<div
+	bind:this={wrap}
+	class={['relative h-full w-full bg-[#1c1a17]', hideUi && 'cursor-none']}
+	onpointermove={wake}
+	role="presentation"
+>
 	<div bind:this={container} class="h-full w-full"></div>
 
 	{#if failed}
@@ -98,65 +156,91 @@
 			The preview needs WebGL, which this browser doesn't support.
 		</div>
 	{:else}
-		<!-- Camera shots -->
-		<div
-			class="absolute inset-x-2 top-18 flex flex-wrap gap-1.5 text-xs text-white [&_button]:cursor-pointer [&_button]:rounded-full [&_button]:bg-black/45 [&_button]:px-3 [&_button]:py-1 [&_button]:backdrop-blur [&_button:hover]:bg-black/65"
-		>
-			{#each shots as shot (shot.id)}
-				<button
-					class={[activeShot === shot.id && mode === 'orbit' && 'ring-2 ring-white/80']}
-					onclick={() => goTo(shot.id)}>{shot.label}</button
-				>
-			{/each}
-			<span class="flex-1"></span>
-			<button class={[mode === 'tour' && 'ring-2 ring-white/80']} onclick={toggleTour}>
-				{mode === 'tour' ? '■ Stop tour' : '▶ Tour'}
-			</button>
-			<button class={[mode === 'walk' && 'ring-2 ring-white/80']} onclick={toggleWalk}>
-				{mode === 'walk' ? '✕ Stop walking' : '🚶 Walk'}
-			</button>
-			<button onclick={fullscreen} aria-label="Fullscreen">⛶</button>
-		</div>
+		{#if mode === 'walk'}
+			<p
+				class="pointer-events-none absolute inset-x-0 top-20 mx-auto w-fit rounded-full bg-sheet/85 px-4 py-1.5 text-[13px] text-muted shadow-float backdrop-blur-md"
+			>
+				Drag to look around · WASD or arrow keys to walk
+			</p>
+			<div class="absolute right-4 bottom-36 z-10 grid grid-cols-3 gap-1.5 md:bottom-20">
+				{#each pad as [key, icon, pos] (key)}
+					<button
+						class="{pos} grid size-11 cursor-pointer place-items-center rounded-full bg-sheet/85 text-ink shadow-float backdrop-blur-md select-none active:bg-accent-soft"
+						aria-label="Walk {key.replace('arrow', '')}"
+						onpointerdown={() => scene?.press(key, true)}
+						onpointerup={() => scene?.press(key, false)}
+						onpointerleave={() => scene?.press(key, false)}
+					>
+						<Icon name={icon as 'chevron-up'} />
+					</button>
+				{/each}
+			</div>
+		{/if}
 
-		<!-- Lighting -->
 		<div
-			class="absolute bottom-2 left-2 flex flex-wrap items-center gap-3 rounded-lg bg-black/45 px-3 py-2 text-xs text-white backdrop-blur"
+			class={[
+				'pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 p-4 transition-opacity duration-700 md:flex-row md:items-end md:justify-between',
+				hideUi && 'opacity-0'
+			]}
 		>
-			<label class="flex items-center gap-2">
-				<span aria-hidden="true">☀</span>
+			<FloatingBar label="Light">
+				<span class="grid size-9 place-items-center text-muted">
+					<Icon name={isDay ? 'sun' : 'moon'} />
+				</span>
 				<input
 					type="range"
 					min="5"
 					max="21.5"
 					step="0.25"
 					bind:value={hours}
-					class="w-32 accent-white sm:w-44"
+					class="time-range w-36 sm:w-48"
+					style:--day={track}
 					aria-label="Time of day"
+					aria-valuetext={formatTime(hours)}
 				/>
-				<span class="w-10 font-mono tabular-nums">{formatTime(hours)}</span>
-			</label>
-			<label class="flex cursor-pointer items-center gap-1.5">
-				<input type="checkbox" bind:checked={lamp} class="accent-white" /> Ceiling lamp
-			</label>
-		</div>
-
-		{#if mode === 'walk'}
-			<div class="absolute right-2 bottom-2 flex flex-col items-end gap-1.5">
-				<span class="rounded bg-black/45 px-2 py-1 text-[11px] text-white/80 backdrop-blur">
-					Drag to look · WASD / arrows to walk
+				<span class="w-14 text-center text-[13px] font-semibold">{formatTime(hours)}</span>
+				<!-- After dark the lamp button glows softly as a hint -->
+				<span class={['rounded-full', !isDay && !lamp && 'ring-2 ring-accent/60']}>
+					<IconButton
+						icon="lamp"
+						label="Ceiling lamp"
+						pressed={lamp}
+						onclick={() => (lamp = !lamp)}
+					/>
 				</span>
-				<div class="grid grid-cols-3 gap-1">
-					{#each pad as [key, icon, pos] (key)}
+			</FloatingBar>
+
+			<FloatingBar label="Camera">
+				<div class="flex max-w-[calc(100vw-12rem)] items-center gap-0.5 overflow-x-auto">
+					{#each shots as shot (shot.id)}
+						{#if shot.id === corners[0]?.id}
+							<span class="flex-none px-1.5 text-xs text-muted">Corners</span>
+						{/if}
 						<button
-							class="{pos} h-10 w-10 cursor-pointer rounded-md bg-black/45 text-white backdrop-blur select-none active:bg-black/70"
-							aria-label="Walk {key.replace('arrow', '')}"
-							onpointerdown={() => scene?.press(key, true)}
-							onpointerup={() => scene?.press(key, false)}
-							onpointerleave={() => scene?.press(key, false)}>{icon}</button
+							class={chip(activeShot === shot.id && mode === 'orbit')}
+							aria-pressed={activeShot === shot.id && mode === 'orbit'}
+							aria-label={shot.label}
+							onclick={() => goTo(shot.id)}
 						>
+							{shot.id.startsWith('corner') ? shot.label.replace('Corner ', '') : shot.label}
+						</button>
 					{/each}
 				</div>
-			</div>
-		{/if}
+				<span class="mx-1 h-5 w-px flex-none bg-line"></span>
+				<IconButton
+					icon={mode === 'tour' ? 'stop' : 'play'}
+					label={mode === 'tour' ? 'Stop tour' : 'Camera tour'}
+					pressed={mode === 'tour'}
+					onclick={toggleTour}
+				/>
+				<IconButton
+					icon="walk"
+					label={mode === 'walk' ? 'Stop walking' : 'Walk around'}
+					pressed={mode === 'walk'}
+					onclick={toggleWalk}
+				/>
+				<IconButton icon="maximize" label="Fullscreen" onclick={fullscreen} />
+			</FloatingBar>
+		</div>
 	{/if}
 </div>

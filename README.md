@@ -18,7 +18,11 @@ The URL holds what you are looking at, so Back, reload and links work:
 
 Shortcuts: drag to move (snaps to walls/furniture, hold Alt for free), arrow keys move 1 cm (Shift 10 cm), R rotates 90°, Esc deselects, Ctrl+Z / Ctrl+Shift+Z undo/redo.
 
-**Experience**: closed, realistically lit room for cinematic shots. Preset viewpoints (door, window, corners, above) with smooth camera glides, a looping camera tour and a first-person walk mode. Sun and sky follow the time-of-day slider (glass front faces east, ~51°N, today's date); ceiling lamp toggle.
+**Experience**: closed, realistically lit room for cinematic shots. Preset viewpoints (door, window, corners, above) with smooth camera glides, a looping camera tour (controls fade out) and a first-person walk mode.
+
+- Light: sun and sky follow the time-of-day slider in German clock time (glass front faces east, ~51°N, today's date), daylight through the glass, a warm bounce off the sunlit floor, reflections of the real sky, eye-like exposure adaptation at dusk, and a ceiling lamp.
+- Furniture is modelled by name: bed, sofa, desk, chair, wardrobe, shelf (with books), nightstand; anything else stays a soft box. Works with German names too (Bett, Schrank, Regal, ...).
+- Room details: skirting boards, door casing and light switch, drifting clouds, trees and buildings outside.
 
 Built with SvelteKit (Svelte 5), TailwindCSS v4 and three.js. Runs fully in the browser; data is saved in `localStorage`.
 
@@ -54,11 +58,12 @@ src/
       planner.svelte.ts   reactive app state (single `planner` instance)
       scene3d.ts          three.js scene (RoomScene class)
     preview/              realistic preview (three.js)
-      PreviewScene.ts     lighting, materials, room, camera glides and tour
+      PreviewScene.ts     lighting, post-processing, room, scenery, camera glides and tour
+      models.ts           parametric furniture models, picked by name
       WalkControls.ts     first-person walking
       shots.ts            viewpoints derived from the room
-      sun.ts              sun position and color by time of day
-      materials.ts        procedural textures (wood, plaster, concrete)
+      sun.ts              sun position (German clock time), color, slider gradient
+      materials.ts        procedural materials (oak, fabric, lacquer, plaster, glass)
     components/
       Header.svelte, Workspace.svelte (full-screen canvas, floating
                             controls, side panel / bottom sheet)

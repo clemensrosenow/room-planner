@@ -25,6 +25,16 @@
 			'<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4m0 4h.01"/>',
 		'chevron-down': '<path d="m6 9 6 6 6-6"/>',
 		'chevron-up': '<path d="m18 15-6-6-6 6"/>',
+		'chevron-left': '<path d="m15 18-6-6 6-6"/>',
+		'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+		sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/>',
+		moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+		lamp: '<path d="M9 18h6m-5 4h4"/><path d="M15.1 14c.2-1 .7-1.7 1.4-2.5A4.7 4.7 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.2 1.5 1.4 2.5"/>',
+		play: '<path d="M7 4.5v15a.5.5 0 0 0 .8.4l11.5-7.5a.5.5 0 0 0 0-.8L7.8 4.1a.5.5 0 0 0-.8.4Z"/>',
+		stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+		walk: '<circle cx="13" cy="4" r="2"/><path d="m9 20 3-6 3 3v4m-3-7 1-5-4 2-2 4m6-2 3 2"/>',
+		maximize:
+			'<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',
 		help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3m.1 4h.01"/>'
 	};
 	export type IconName = keyof typeof ICONS;
