@@ -36,7 +36,8 @@ class Planner {
 		this.cfg = data.cfg;
 		this.furn = data.furn;
 		this.measured = data.measured;
-		if (loadView() === 'plan') this.view = 'plan';
+		const view = loadView();
+		if (view === 'plan' || view === 'preview') this.view = view;
 	}
 
 	/** Persists the data and records an undo step. Called on every change. */

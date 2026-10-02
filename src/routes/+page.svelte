@@ -2,6 +2,7 @@
 	import FurnitureList from '#lib/components/FurnitureList.svelte';
 	import Header from '#lib/components/Header.svelte';
 	import PlanView from '#lib/components/PlanView.svelte';
+	import Preview from '#lib/components/Preview.svelte';
 	import RoomSettings from '#lib/components/RoomSettings.svelte';
 	import Scene3D from '#lib/components/Scene3D.svelte';
 	import { planner } from '#lib/planner/planner.svelte.ts';
@@ -27,7 +28,8 @@
 			return;
 		}
 		const f = planner.selected;
-		if (!f) return;
+		// The preview uses arrow keys for walking
+		if (!f || planner.view === 'preview') return;
 		const step = e.shiftKey ? 10 : 1;
 		if (e.key === 'ArrowLeft') f.cx -= step;
 		else if (e.key === 'ArrowRight') f.cx += step;
@@ -58,7 +60,7 @@
 	>
 		<div class="flex flex-wrap items-center gap-2 border-b border-line px-2.5 py-2">
 			<div class="inline-flex overflow-hidden rounded-[5px] border border-line-strong" role="group">
-				{#each [['3d', '3D'], ['plan', 'Floor plan']] as const as [v, label] (v)}
+				{#each [['3d', '3D'], ['plan', 'Floor plan'], ['preview', 'Preview']] as const as [v, label] (v)}
 					<button
 						class={[
 							'cursor-pointer px-3 py-[5px] text-[13px] font-semibold',
@@ -88,13 +90,15 @@
 					Low walls
 				</button>
 				<button class="tbtn" onclick={() => scene3d?.resetCamera()}>Reset view</button>
-			{:else}
+			{:else if planner.view === 'plan'}
 				<button class="tbtn" aria-pressed={showDims} onclick={() => (showDims = !showDims)}>
 					Dimensions
 				</button>
 			{/if}
 			<span class="ml-auto text-xs text-muted max-[900px]:hidden">
-				Drag furniture (Alt: no snapping) · arrow keys 1 cm (⇧ 10 cm) · R rotates 90°
+				{planner.view === 'preview'
+					? 'Drag to orbit · scroll to zoom · pick a shot, tour or walk'
+					: 'Drag furniture (Alt: no snapping) · arrow keys 1 cm (⇧ 10 cm) · R rotates 90°'}
 			</span>
 		</div>
 		<div
@@ -105,6 +109,8 @@
 			</div>
 			{#if planner.view === 'plan'}
 				<div class="absolute inset-0"><PlanView {showDims} /></div>
+			{:else if planner.view === 'preview'}
+				<div class="absolute inset-0"><Preview /></div>
 			{/if}
 		</div>
 	</section>

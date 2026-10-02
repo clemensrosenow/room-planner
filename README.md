@@ -4,6 +4,8 @@ Interactive planner for one room: enter the room dimensions, add furniture boxes
 
 Shortcuts: drag to move (snaps to walls/furniture, hold Alt for free), arrow keys move 1 cm (Shift 10 cm), R rotates 90°, Esc deselects, Ctrl+Z / Ctrl+Shift+Z undo/redo.
 
+**Preview** tab: closed, realistically lit room for cinematic shots. Preset viewpoints (door, window, corners, above) with smooth camera glides, a looping camera tour and a first-person walk mode. Sun and sky follow the time-of-day slider (glass front faces east, ~51°N, today's date); ceiling lamp toggle.
+
 Built with SvelteKit (Svelte 5), TailwindCSS v4 and three.js. Runs fully in the browser; data is saved in `localStorage`.
 
 ## Develop
@@ -32,8 +34,14 @@ src/
       storage.ts          load/save (localStorage)
       planner.svelte.ts   reactive app state (single `planner` instance)
       scene3d.ts          three.js scene (RoomScene class)
+    preview/              realistic preview (three.js)
+      PreviewScene.ts     lighting, materials, room, camera glides and tour
+      WalkControls.ts     first-person walking
+      shots.ts            viewpoints derived from the room
+      sun.ts              sun position and color by time of day
+      materials.ts        procedural textures (wood, plaster, concrete)
     components/
-      Header.svelte, PlanView.svelte, Scene3D.svelte
+      Header.svelte, PlanView.svelte, Scene3D.svelte, Preview.svelte
       RoomSettings.svelte, FurnitureList.svelte, FurnitureCard.svelte
       ui/                 NumberField, SelectField, Section, ConfirmButton
 ```

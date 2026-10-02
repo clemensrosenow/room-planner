@@ -50,4 +50,4 @@ export interface PlannerData {
 }
 
 export type Point = [number, number];
-export type View = '3d' | 'plan';
+export type View = '3d' | 'plan' | 'preview';
