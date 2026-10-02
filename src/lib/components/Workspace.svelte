@@ -1,46 +1,64 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import Icon from './ui/Icon.svelte';
 
 	interface Props {
-		/** Controls above the canvas */
-		toolbar?: Snippet;
-		/** Side panel; the canvas takes the full width without it */
-		aside?: Snippet;
-		asideLabel?: string;
+		/** Floating controls in the bottom-left corner of the canvas */
+		controls?: Snippet;
+		/** Panel content: floating card on the right (desktop) or bottom sheet (mobile) */
+		panel?: Snippet;
+		title?: string;
+		/** Small text next to the panel title */
+		sub?: string;
+		/** Let the canvas run under the header too */
+		fullBleed?: boolean;
 		/** The canvas (3D, plan or preview) */
 		children: Snippet;
 	}
-	let { toolbar, aside, asideLabel, children }: Props = $props();
+	let { controls, panel, title = '', sub = '', fullBleed = false, children }: Props = $props();
+
+	/** Mobile only: the sheet can shrink to its title */
+	let collapsed = $state(false);
 </script>
 
-<div
-	class={[
-		'grid h-full gap-3 max-[900px]:h-auto max-[900px]:grid-cols-[minmax(0,1fr)]',
-		aside ? 'grid-cols-[minmax(0,1fr)_384px]' : 'grid-cols-[minmax(0,1fr)]'
-	]}
->
-	<section
-		class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-line bg-sheet"
-		aria-label="View"
+<div class="flex h-full flex-col md:block">
+	<div
+		class={[
+			'relative min-h-0 flex-1 md:absolute md:inset-0',
+			!fullBleed && 'pt-16',
+			panel && 'md:right-[392px]'
+		]}
 	>
-		{#if toolbar}
-			<div class="flex flex-wrap items-center gap-2 border-b border-line px-2.5 py-2">
-				{@render toolbar()}
-			</div>
-		{/if}
-		<div
-			class="relative min-h-[340px] flex-1 max-[900px]:h-[min(64vh,540px)] max-[900px]:flex-none"
-		>
+		<div class="relative h-full">
 			{@render children()}
 		</div>
-	</section>
+		{#if controls}
+			<div class="pointer-events-none absolute bottom-4 left-4 z-10 flex flex-wrap gap-2">
+				{@render controls()}
+			</div>
+		{/if}
+	</div>
 
-	{#if aside}
+	{#if panel}
 		<aside
-			class="min-h-0 overflow-auto rounded-md border border-line bg-sheet max-[900px]:overflow-visible"
-			aria-label={asideLabel}
+			class="relative z-10 flex max-h-[45dvh] flex-none flex-col rounded-t-3xl bg-sheet shadow-float ring-1 ring-line/70 md:absolute md:top-20 md:right-4 md:bottom-4 md:max-h-none md:w-[360px] md:rounded-3xl"
+			aria-label={title}
 		>
-			{@render aside()}
+			<header class="flex items-baseline gap-2 px-5 pt-4 pb-3">
+				<h2 class="text-[17px] font-bold tracking-tight">{title}</h2>
+				<span class="text-[13px] text-muted">{sub}</span>
+				<button
+					class="ml-auto grid size-8 cursor-pointer place-items-center self-center rounded-full text-muted hover:bg-paper md:hidden"
+					aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+					aria-expanded={!collapsed}
+					onclick={() => (collapsed = !collapsed)}
+				>
+					<Icon name={collapsed ? 'chevron-up' : 'chevron-down'} />
+				</button>
+			</header>
+			<div class={['min-h-0 flex-1 overflow-y-auto px-5 pb-5', collapsed && 'max-md:hidden']}>
+				{@render panel()}
+			</div>
 		</aside>
 	{/if}
 </div>

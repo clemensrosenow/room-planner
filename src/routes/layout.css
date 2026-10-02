@@ -13,64 +13,71 @@
 	--color-warn: var(--warn);
 	--color-warn-soft: var(--warn-soft);
 	--color-ok: var(--ok);
-	--font-sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+	--font-sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'Manrope', system-ui, sans-serif;
+	--shadow-float: var(--float);
 }
 
+/*
+ * Soft architectural palette: warm paper, ink-brown text, one sage accent.
+ * Colors are CSS variables so the 3D scene can read them too (see cssVar).
+ */
 :root {
-	--paper: #edf0f3;
-	--sheet: #f9fafb;
-	--ink: #1a2332;
-	--muted: #5b6677;
-	--line: #d3d9e1;
-	--line-strong: #a9b3c0;
-	--accent: #2a45b8;
-	--accent-soft: #e2e7fa;
-	--warn: #b4460e;
-	--warn-soft: #fbe8dd;
-	--ok: #2c7549;
-	--wall: #283041;
-	--wall3d: #f3f4f6;
-	--floor: #ffffff;
-	--loggia: #e1e5ea;
-	--glass: #5b9cc0;
-	--scene: #e3e7ec;
-	--grid: #e3e8ee;
-	--grid-strong: #c9d1db;
-	--f1: #c49f72;
-	--f2: #86a1c2;
-	--f3: #90b18f;
-	--f4: #c69292;
-	--f5: #a99ac4;
+	--paper: #f3f0ea;
+	--sheet: #fffdf9;
+	--ink: #2d2a26;
+	--muted: #8a847a;
+	--line: #e7e2d9;
+	--line-strong: #d2cbbf;
+	--accent: #3d7466;
+	--accent-soft: #e2ece7;
+	--warn: #c0502f;
+	--warn-soft: #f8e5dd;
+	--ok: #3d7466;
+	--float: 0 1px 2px rgb(60 45 30 / 0.05), 0 10px 30px -10px rgb(60 45 30 / 0.18);
+	--wall: #4a443d;
+	--wall3d: #f6f2ec;
+	--floor: #fffdf9;
+	--loggia: #ebe6de;
+	--glass: #86adbb;
+	--scene: #f3f0ea;
+	--grid: #efeae2;
+	--grid-strong: #e4ded4;
+	--f1: #d8b48e;
+	--f2: #a3b6c9;
+	--f3: #adc4a4;
+	--f4: #d9a797;
+	--f5: #baabcb;
 	color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--paper: #12161c;
-		--sheet: #1a1f27;
-		--ink: #e3e8ef;
-		--muted: #97a2b2;
-		--line: #2b333e;
-		--line-strong: #465161;
-		--accent: #8196f3;
-		--accent-soft: #232c4d;
-		--warn: #f29357;
-		--warn-soft: #3a2418;
-		--ok: #62c38b;
-		--wall: #c5cdd8;
-		--wall3d: #3b4350;
-		--floor: #232a33;
-		--loggia: #2a313b;
-		--glass: #6fb3d6;
-		--scene: #161b22;
-		--grid: #2a313b;
-		--grid-strong: #3a4350;
-		--f1: #b8936a;
-		--f2: #7d97b8;
-		--f3: #86a685;
-		--f4: #b98787;
-		--f5: #9d8fb8;
+		--paper: #1c1a17;
+		--sheet: #26231f;
+		--ink: #ede8e0;
+		--muted: #9d968b;
+		--line: #35312c;
+		--line-strong: #4b463f;
+		--accent: #85bcac;
+		--accent-soft: #26352f;
+		--warn: #ee8d6c;
+		--warn-soft: #3b2620;
+		--ok: #85bcac;
+		--float: 0 1px 2px rgb(0 0 0 / 0.25), 0 12px 32px -10px rgb(0 0 0 / 0.55);
+		--wall: #cdc5b9;
+		--wall3d: #3a3631;
+		--floor: #2a2723;
+		--loggia: #322e29;
+		--glass: #7fb0c2;
+		--scene: #1c1a17;
+		--grid: #312d28;
+		--grid-strong: #3a362f;
+		--f1: #b8946f;
+		--f2: #8296ab;
+		--f3: #8ca484;
+		--f4: #b88778;
+		--f5: #9a8bab;
 		color-scheme: dark;
 	}
 }
@@ -79,39 +86,29 @@
 	html,
 	body {
 		height: 100%;
+		overflow: hidden;
 	}
 	body {
-		@apply bg-paper font-sans text-sm leading-normal text-ink;
+		@apply bg-paper font-sans text-sm leading-normal text-ink antialiased;
+		font-variant-numeric: tabular-nums;
 	}
 	:focus-visible {
 		@apply outline-2 outline-offset-2 outline-accent;
-	}
-	@media (max-width: 900px) {
-		html,
-		body {
-			height: auto;
-		}
 	}
 }
 
 /* Shared form controls */
 @layer components {
 	.btn {
-		@apply cursor-pointer rounded-[5px] border border-line-strong bg-transparent px-[11px] py-1.5 text-[13px] hover:border-ink;
-	}
-	.btn[aria-pressed='true'] {
-		@apply border-accent bg-accent-soft text-accent;
-	}
-	.btn-primary {
-		@apply border-accent bg-accent font-semibold text-sheet hover:border-accent;
+		@apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full bg-paper px-3.5 py-1.5 text-[13px] font-semibold text-ink transition-colors hover:bg-line;
 	}
 	.btn-danger {
 		@apply text-warn;
 	}
 	.btn-confirm {
-		@apply border-warn bg-warn text-sheet;
+		@apply bg-warn text-sheet hover:bg-warn;
 	}
 	.input {
-		@apply w-full rounded-[5px] border border-line-strong bg-paper px-2 py-1.5 text-[13.5px] focus:border-accent focus:outline-none;
+		@apply w-full rounded-xl border border-transparent bg-paper px-3 py-2 text-[14px] transition-colors focus:border-accent focus:outline-none;
 	}
 }

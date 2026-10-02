@@ -1,151 +1,195 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { cm, m2 } from '#lib/planner/format.ts';
+	import { cm } from '#lib/planner/format.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Hinge, Swing } from '#lib/planner/types.ts';
-	import ConfirmButton from './ui/ConfirmButton.svelte';
-	import NumberField from './ui/NumberField.svelte';
-	import Section from './ui/Section.svelte';
-	import SelectField from './ui/SelectField.svelte';
 	import { setParams } from '#lib/url.ts';
+	import ConfirmButton from './ui/ConfirmButton.svelte';
+	import ScrubValue from './ui/ScrubValue.svelte';
+	import Segmented from './ui/Segmented.svelte';
+	import Switch from './ui/Switch.svelte';
 
 	const cfg = $derived(planner.cfg);
 	const g = $derived(planner.geo);
 
-	const hinges: { value: Hinge; label: string }[] = [
-		{ value: 'left', label: 'left' },
-		{ value: 'right', label: 'right' }
-	];
-	/** The open section follows `?focus=` (default: walls) */
-	type Part = 'walls' | 'door' | 'front' | 'loggia' | 'more';
-	const focus = $derived(page.url.searchParams.get('focus') ?? 'walls');
-	const section = (part: Part) => ({
-		open: focus === part,
-		ontoggle: (open: boolean) => {
-			if (open) setParams({ focus: part === 'walls' ? null : part }, { replace: true });
-		}
+	/** The visible part follows `?focus=` (default: walls) */
+	const PARTS = [
+		{ value: 'walls', label: 'Walls' },
+		{ value: 'door', label: 'Door' },
+		{ value: 'front', label: 'Glass' },
+		{ value: 'loggia', label: 'Loggia' },
+		{ value: 'more', label: 'More' }
+	] as const;
+	type Part = (typeof PARTS)[number]['value'];
+	const focus = $derived.by<Part>(() => {
+		const f = page.url.searchParams.get('focus');
+		return PARTS.find((p) => p.value === f)?.value ?? 'walls';
 	});
 
-	const swing = (outLabel: string): { value: Swing; label: string }[] => [
-		{ value: 'in', label: 'into the room' },
-		{ value: 'out', label: outLabel }
-	];
+	const hinges = [
+		{ value: 'left', label: 'Hinge left' },
+		{ value: 'right', label: 'Hinge right' }
+	] as const satisfies readonly { value: Hinge; label: string }[];
+	const swing = (outLabel: string) =>
+		[
+			{ value: 'in', label: 'Opens inwards' },
+			{ value: 'out', label: outLabel }
+		] as const satisfies readonly { value: Swing; label: string }[];
 </script>
 
-<Section title="Room" sub={m2(g.area)} {...section('walls')}>
-	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
-		<NumberField label="Total width" value={cfg.W} onchange={(v) => (cfg.W = v)} />
-		<NumberField label="Right wall length" value={cfg.L} onchange={(v) => (cfg.L = v)} />
-		<NumberField label="Hallway corner width" value={cfg.NW} onchange={(v) => (cfg.NW = v)} />
-		<NumberField label="Hallway corner depth" value={cfg.N} onchange={(v) => (cfg.N = v)} />
-		<NumberField label="Ceiling height" value={cfg.H} onchange={(v) => (cfg.H = v)} />
-	</div>
-	<p class="font-mono text-xs text-muted">
-		{g.hasNotch
-			? `Left wall: ${cm(g.L - g.N)} cm · Wall beside the door to hallway corner: ${cm(g.N)} cm deep`
-			: 'Rectangular room without hallway corner'}
-	</p>
-</Section>
+<div class="grid gap-5">
+	<Segmented
+		label="Part of the room"
+		full
+		value={focus}
+		options={PARTS}
+		onchange={(part) => setParams({ focus: part === 'walls' ? null : part }, { replace: true })}
+	/>
 
-<Section title="Room door" sub="in the hallway wall" {...section('door')}>
-	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
-		<NumberField
-			label="Offset from left wall"
-			value={cfg.door.off}
-			onchange={(v) => (cfg.door.off = v)}
-		/>
-		<NumberField
-			label="Width (clear opening)"
-			value={cfg.door.w}
-			onchange={(v) => (cfg.door.w = v)}
-		/>
-		<NumberField label="Height" value={cfg.door.h} onchange={(v) => (cfg.door.h = v)} />
-		<SelectField
+	{#if g.issues.length}
+		<ul class="grid gap-1 rounded-2xl bg-warn-soft px-4 py-3 text-[13px] text-warn">
+			{#each g.issues as issue (issue)}
+				<li>{issue}</li>
+			{/each}
+		</ul>
+	{/if}
+
+	{#if focus === 'walls'}
+		<div class="grid grid-cols-2 gap-3">
+			<ScrubValue label="Width" value={cfg.W} min={100} max={2000} onchange={(v) => (cfg.W = v)} />
+			<ScrubValue label="Length" value={cfg.L} min={100} max={2000} onchange={(v) => (cfg.L = v)} />
+			<ScrubValue label="Corner width" value={cfg.NW} min={0} onchange={(v) => (cfg.NW = v)} />
+			<ScrubValue label="Corner depth" value={cfg.N} min={0} onchange={(v) => (cfg.N = v)} />
+			<ScrubValue
+				label="Ceiling height"
+				value={cfg.H}
+				min={150}
+				max={500}
+				onchange={(v) => (cfg.H = v)}
+			/>
+		</div>
+		<p class="text-[13px] text-muted">
+			{g.hasNotch
+				? `The hallway corner cuts ${cm(g.NW)} × ${cm(g.N)} cm out of the top left. Set its width to 0 for a rectangular room.`
+				: 'Rectangular room. Give the corner a width and depth to cut out the hallway corner.'}
+		</p>
+	{:else if focus === 'door'}
+		<div class="grid grid-cols-2 gap-3">
+			<ScrubValue
+				label="From left wall"
+				value={cfg.door.off}
+				min={0}
+				onchange={(v) => (cfg.door.off = v)}
+			/>
+			<ScrubValue label="Width" value={cfg.door.w} min={40} onchange={(v) => (cfg.door.w = v)} />
+			<ScrubValue label="Height" value={cfg.door.h} min={150} onchange={(v) => (cfg.door.h = v)} />
+		</div>
+		<Segmented
 			label="Hinge"
+			full
 			value={cfg.door.hinge}
 			options={hinges}
 			onchange={(v) => (cfg.door.hinge = v)}
 		/>
-		<SelectField
+		<Segmented
 			label="Opens"
+			full
 			value={cfg.door.swing}
-			options={swing('into the hallway')}
+			options={swing('Into hallway')}
 			onchange={(v) => (cfg.door.swing = v)}
 		/>
-	</div>
-</Section>
-
-<Section title="Glass front to loggia" {...section('front')}>
-	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
-		<NumberField
-			label="Wall section left"
-			value={cfg.front.wl}
-			onchange={(v) => (cfg.front.wl = v)}
-		/>
-		<NumberField
-			label="Wall section right"
-			value={cfg.front.wr}
-			onchange={(v) => (cfg.front.wr = v)}
-		/>
-		<NumberField
-			label="Glass front height"
-			value={cfg.front.glassH}
-			onchange={(v) => (cfg.front.glassH = v)}
-		/>
-		<NumberField
-			label="Balcony door from left wall"
-			value={cfg.front.door.off}
-			onchange={(v) => (cfg.front.door.off = v)}
-		/>
-		<NumberField
-			label="Balcony door width"
-			value={cfg.front.door.w}
-			onchange={(v) => (cfg.front.door.w = v)}
-		/>
-		<SelectField
-			label="Hinge"
+	{:else if focus === 'front'}
+		<div class="grid grid-cols-2 gap-3">
+			<ScrubValue
+				label="Wall left"
+				value={cfg.front.wl}
+				min={0}
+				onchange={(v) => (cfg.front.wl = v)}
+			/>
+			<ScrubValue
+				label="Wall right"
+				value={cfg.front.wr}
+				min={0}
+				onchange={(v) => (cfg.front.wr = v)}
+			/>
+			<ScrubValue
+				label="Glass height"
+				value={cfg.front.glassH}
+				min={100}
+				onchange={(v) => (cfg.front.glassH = v)}
+			/>
+		</div>
+		<h3 class="-mb-2 text-[13px] font-semibold">Balcony door</h3>
+		<div class="grid grid-cols-2 gap-3">
+			<ScrubValue
+				label="From left wall"
+				value={cfg.front.door.off}
+				min={0}
+				onchange={(v) => (cfg.front.door.off = v)}
+			/>
+			<ScrubValue
+				label="Width"
+				value={cfg.front.door.w}
+				min={40}
+				onchange={(v) => (cfg.front.door.w = v)}
+			/>
+		</div>
+		<Segmented
+			label="Balcony door hinge"
+			full
 			value={cfg.front.door.hinge}
 			options={hinges}
 			onchange={(v) => (cfg.front.door.hinge = v)}
 		/>
-		<SelectField
-			label="Opens"
+		<Segmented
+			label="Balcony door opens"
+			full
 			value={cfg.front.door.swing}
-			options={swing('onto the loggia')}
+			options={swing('Onto loggia')}
 			onchange={(v) => (cfg.front.door.swing = v)}
 		/>
-	</div>
-	<p class="font-mono text-xs text-muted">
-		Glass front: {cm(g.front.gx1 - g.front.gx0)} cm wide · fixed glass left {cm(
-			g.front.bOff - g.front.gx0
-		)} cm, right {cm(g.front.gx1 - g.front.bOff - g.front.bW)} cm
-	</p>
-</Section>
-
-<Section title="Loggia" sub={g.D > 0 ? m2(g.loggiaArea) : ''} {...section('loggia')}>
-	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
-		<NumberField label="Depth" value={cfg.loggia.D} onchange={(v) => (cfg.loggia.D = v)} />
-		<NumberField
-			label="Parapet height"
-			value={cfg.loggia.parapetH}
-			onchange={(v) => (cfg.loggia.parapetH = v)}
-		/>
-	</div>
-</Section>
-
-<Section title="Walls & status" {...section('more')}>
-	<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
-		<NumberField label="Interior walls (display)" value={cfg.tI} onchange={(v) => (cfg.tI = v)} />
-		<NumberField label="Wall to loggia" value={cfg.tE} onchange={(v) => (cfg.tE = v)} />
-	</div>
-	<label class="flex items-center gap-2 text-[13px]">
-		<input type="checkbox" bind:checked={planner.measured} /> Dimensions have been measured
-	</label>
-	<div>
-		<ConfirmButton
-			label="Reset to plan estimate"
-			confirmLabel="Really reset room dimensions? (furniture stays)"
-			onconfirm={() => planner.resetRoom()}
-		/>
-	</div>
-</Section>
+	{:else if focus === 'loggia'}
+		<div class="grid grid-cols-2 gap-3">
+			<ScrubValue
+				label="Depth"
+				value={cfg.loggia.D}
+				min={0}
+				max={1000}
+				onchange={(v) => (cfg.loggia.D = v)}
+			/>
+			<ScrubValue
+				label="Parapet height"
+				value={cfg.loggia.parapetH}
+				min={0}
+				max={200}
+				onchange={(v) => (cfg.loggia.parapetH = v)}
+			/>
+		</div>
+		<p class="text-[13px] text-muted">Set the depth to 0 if there is no loggia.</p>
+	{:else}
+		<div class="grid grid-cols-2 gap-3">
+			<ScrubValue
+				label="Inner walls"
+				value={cfg.tI}
+				min={4}
+				max={60}
+				onchange={(v) => (cfg.tI = v)}
+			/>
+			<ScrubValue
+				label="Outer wall"
+				value={cfg.tE}
+				min={4}
+				max={80}
+				onchange={(v) => (cfg.tE = v)}
+			/>
+		</div>
+		<Switch label="Dimensions have been measured" bind:checked={planner.measured} />
+		<div>
+			<ConfirmButton
+				label="Reset to plan estimate"
+				confirmLabel="Really reset? Furniture stays"
+				onconfirm={() => planner.resetRoom()}
+			/>
+		</div>
+	{/if}
+</div>

@@ -100,7 +100,7 @@
 	{:else}
 		<!-- Camera shots -->
 		<div
-			class="absolute inset-x-2 top-2 flex flex-wrap gap-1.5 text-xs text-white [&_button]:cursor-pointer [&_button]:rounded-full [&_button]:bg-black/45 [&_button]:px-3 [&_button]:py-1 [&_button]:backdrop-blur [&_button:hover]:bg-black/65"
+			class="absolute inset-x-2 top-18 flex flex-wrap gap-1.5 text-xs text-white [&_button]:cursor-pointer [&_button]:rounded-full [&_button]:bg-black/45 [&_button]:px-3 [&_button]:py-1 [&_button]:backdrop-blur [&_button:hover]:bg-black/65"
 		>
 			{#each shots as shot (shot.id)}
 				<button

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { PALETTE } from '#lib/planner/defaults.ts';
-	import { cm } from '#lib/planner/format.ts';
 	import { bbox, normalizeAngle, setPosition, setSize } from '#lib/planner/furniture.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Furniture } from '#lib/planner/types.ts';
 	import { selectItem } from '#lib/url.ts';
 	import ConfirmButton from './ui/ConfirmButton.svelte';
-	import NumberField from './ui/NumberField.svelte';
+	import Icon from './ui/Icon.svelte';
+	import IconButton from './ui/IconButton.svelte';
+	import ScrubValue from './ui/ScrubValue.svelte';
 
 	let { f }: { f: Furniture } = $props();
 
@@ -26,105 +27,92 @@
 <!-- Only the selected piece shows all fields; the others collapse to one line -->
 {#if !selected}
 	<button
-		class="flex w-full cursor-pointer items-center gap-2 rounded-md border border-line bg-paper px-2.5 py-2 text-left hover:border-line-strong"
+		class="flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-paper"
 		onclick={() => selectItem(f.id)}
 	>
 		<span
-			class="h-3 w-3 flex-none rounded-sm border border-line-strong"
+			class="size-3.5 flex-none rounded-[5px]"
 			style:background="var({PALETTE[f.color % PALETTE.length]})"
 		></span>
 		<span class="flex-1 truncate font-semibold">{f.name || 'Box'}</span>
-		<span class="font-mono text-xs text-muted tabular-nums">{cm(f.w)} × {cm(f.d)} × {cm(f.h)}</span>
 		{#if check?.bad}
-			<span class="text-warn" title="Has a warning" aria-label="Has a warning">⚠</span>
+			<span class="text-warn" title="Has a warning" aria-label="Has a warning">
+				<Icon name="alert" size={16} />
+			</span>
 		{/if}
 	</button>
 {:else}
 	<div
 		bind:this={card}
-		class="grid gap-2 rounded-md border border-accent bg-paper p-2.5 shadow-[0_0_0_1px_var(--accent)] [&_.num]:bg-sheet"
+		class="my-1 grid gap-4 rounded-2xl bg-sheet p-4 shadow-float ring-1 ring-accent/50"
 	>
 		<div class="flex items-center gap-2">
-			<input class="input flex-1 bg-sheet font-semibold" aria-label="Name" bind:value={f.name} />
-			<div class="flex gap-[5px]">
-				{#each PALETTE as color, i (color)}
-					<button
-						class={[
-							'h-5 w-5 cursor-pointer rounded border border-line-strong p-0',
-							f.color === i && 'outline-2 outline-offset-1 outline-ink'
-						]}
-						style:background="var({color})"
-						aria-label="Color {i + 1}"
-						aria-pressed={f.color === i}
-						onclick={() => (f.color = i)}
-					></button>
-				{/each}
-			</div>
+			<input class="input flex-1 font-semibold" aria-label="Name" bind:value={f.name} />
+			<IconButton icon="close" label="Done (Esc)" onclick={() => selectItem(null)} />
 		</div>
 
-		<div class="grid grid-cols-3 gap-x-2.5 gap-y-2">
-			<NumberField label="Width" value={f.w} onchange={(v) => setSize(f, 'w', v)} />
-			<NumberField label="Depth" value={f.d} onchange={(v) => setSize(f, 'd', v)} />
-			<NumberField label="Height" value={f.h} onchange={(v) => setSize(f, 'h', v)} />
-		</div>
-		<div class="grid grid-cols-2 gap-x-2.5 gap-y-2">
-			<NumberField
-				label="X from left wall"
-				value={box.minX}
-				onchange={(v) => setPosition(f, 'x', v)}
-			/>
-			<NumberField
-				label="Y from top wall"
-				value={box.minY}
-				onchange={(v) => setPosition(f, 'y', v)}
-			/>
-		</div>
-		<div class="flex items-end gap-1.5">
-			<div class="flex-1">
-				<NumberField
-					label="Rotation"
-					unit="°"
-					value={f.rot}
-					onchange={(v) => (f.rot = normalizeAngle(v))}
-				/>
-			</div>
-			<button
-				class="btn"
-				aria-label="Rotate 90° counter-clockwise"
-				onclick={() => planner.rotate(f, -90)}>↺ 90°</button
-			>
-			<button class="btn" aria-label="Rotate 90° clockwise" onclick={() => planner.rotate(f, 90)}
-				>↻ 90°</button
-			>
+		<div class="flex gap-2" role="group" aria-label="Color">
+			{#each PALETTE as color, i (color)}
+				<button
+					class={[
+						'size-7 cursor-pointer rounded-full transition-transform hover:scale-110',
+						f.color === i && 'ring-2 ring-ink ring-offset-2 ring-offset-sheet'
+					]}
+					style:background="var({color})"
+					aria-label="Color {i + 1}"
+					aria-pressed={f.color === i}
+					onclick={() => (f.color = i)}
+				></button>
+			{/each}
 		</div>
 
-		<div class="flex flex-wrap gap-[5px] text-[11.5px]">
-			{#if check && !check.bad}
-				<span class="text-ok">✓ fits</span>
-			{:else if check}
-				{#if check.out}<span class="rounded-full bg-warn-soft px-2 py-0.5 text-warn"
-						>sticks out of the room</span
-					>{/if}
+		<div class="grid grid-cols-3 gap-2">
+			<ScrubValue label="Width" value={f.w} min={1} onchange={(v) => setSize(f, 'w', v)} />
+			<ScrubValue label="Depth" value={f.d} min={1} onchange={(v) => setSize(f, 'd', v)} />
+			<ScrubValue label="Height" value={f.h} min={1} onchange={(v) => setSize(f, 'h', v)} />
+		</div>
+		<div class="grid grid-cols-3 gap-2">
+			<ScrubValue label="From left" value={box.minX} onchange={(v) => setPosition(f, 'x', v)} />
+			<ScrubValue label="From top" value={box.minY} onchange={(v) => setPosition(f, 'y', v)} />
+			<ScrubValue
+				label="Rotation"
+				unit="°"
+				value={f.rot}
+				onchange={(v) => (f.rot = normalizeAngle(v))}
+			/>
+		</div>
+
+		{#if check?.bad}
+			<ul class="flex flex-wrap gap-1.5 text-[12.5px]">
+				{#if check.out}<li class="rounded-full bg-warn-soft px-2.5 py-1 text-warn">
+						Sticks out of the room
+					</li>{/if}
 				{#each check.doors as d (d)}
-					<span class="rounded-full bg-warn-soft px-2 py-0.5 text-warn"
-						>in the swing area of the {d}</span
-					>
+					<li class="rounded-full bg-warn-soft px-2.5 py-1 text-warn">Blocks the {d}</li>
 				{/each}
 				{#each check.overlap as name, i (i)}
-					<span class="rounded-full bg-warn-soft px-2 py-0.5 text-warn">overlaps “{name}”</span>
+					<li class="rounded-full bg-warn-soft px-2.5 py-1 text-warn">Overlaps {name}</li>
 				{/each}
-			{/if}
-		</div>
+			</ul>
+		{:else if check}
+			<p class="flex items-center gap-1.5 text-[13px] text-ok">
+				<Icon name="check" size={16} /> Fits
+			</p>
+		{/if}
 
-		<div class="flex flex-wrap items-center gap-2">
-			<button class="btn" onclick={() => selectItem(planner.duplicate(f).id)}>Duplicate</button>
+		<div class="flex items-center gap-1">
+			<IconButton icon="rotate-ccw" label="Rotate left" onclick={() => planner.rotate(f, -90)} />
+			<IconButton icon="rotate-cw" label="Rotate right (R)" onclick={() => planner.rotate(f, 90)} />
+			<IconButton
+				icon="copy"
+				label="Duplicate"
+				onclick={() => selectItem(planner.duplicate(f).id)}
+			/>
+			<span class="flex-1"></span>
 			<ConfirmButton
 				label="Delete"
 				confirmLabel="Really delete?"
-				onconfirm={() => {
-					planner.remove(f);
-					selectItem(null);
-				}}
+				onconfirm={() => planner.remove(f)}
 			/>
 		</div>
 	</div>

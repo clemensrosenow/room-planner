@@ -24,6 +24,7 @@
 	/** Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y work everywhere except inside form fields. */
 	function onkeydown(e: KeyboardEvent) {
 		const t = e.target as HTMLElement;
+		if (e.defaultPrevented) return;
 		if (['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName) || t.isContentEditable) return;
 		const key = e.key.toLowerCase();
 		if (!(e.ctrlKey || e.metaKey) || (key !== 'z' && key !== 'y')) return;
@@ -40,9 +41,9 @@
 
 <svelte:window {onkeydown} />
 
-<div class="flex h-full flex-col gap-3 px-4 pt-3.5 pb-4 max-[900px]:h-auto">
+<div class="relative h-dvh overflow-hidden">
 	<Header />
-	<main class="min-h-0 flex-1">
+	<main class="h-full">
 		{@render children()}
 	</main>
 </div>

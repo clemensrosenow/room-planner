@@ -1,72 +1,61 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { cm, m2 } from '#lib/planner/format.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { STEPS } from '#lib/url.ts';
-
-	const g = $derived(planner.geo);
+	import FloatingBar from './ui/FloatingBar.svelte';
+	import IconButton from './ui/IconButton.svelte';
 </script>
 
-<header class="flex flex-wrap items-center gap-x-4 gap-y-2">
-	<h1 class="m-0 text-[26px] leading-none font-semibold tracking-[.01em] font-stretch-[72%]">
-		Room Planner
-	</h1>
+<header class="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-16 items-center gap-3 px-4">
+	<span class="flex-1 text-[15px] font-bold tracking-tight max-sm:hidden">Room Planner</span>
 
-	<nav aria-label="Steps">
-		<ol class="flex overflow-hidden rounded-[5px] border border-line-strong">
-			{#each STEPS as step, i (step.path)}
-				{@const current = page.url.pathname === step.path}
-				<li>
-					<a
-						href={step.path}
-						class={[
-							'block px-3 py-[5px] text-[13px] font-semibold no-underline',
-							current ? 'bg-ink text-sheet' : 'text-ink hover:bg-paper'
-						]}
-						aria-current={current ? 'page' : undefined}
-						><span class="mr-1 opacity-60">{i + 1}</span>{step.label}</a
-					>
-				</li>
-			{/each}
-		</ol>
+	<nav aria-label="Steps" class="max-sm:flex-1">
+		<FloatingBar>
+			<ol class="flex gap-0.5">
+				{#each STEPS as step, i (step.path)}
+					{@const current = page.url.pathname === step.path}
+					<li>
+						<a
+							href={step.path}
+							class={[
+								'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors max-sm:px-2.5',
+								current ? 'bg-ink text-sheet' : 'text-muted hover:text-ink'
+							]}
+							aria-current={current ? 'page' : undefined}
+						>
+							<span class="opacity-50 max-sm:hidden">{i + 1}</span>{step.label}
+						</a>
+					</li>
+				{/each}
+			</ol>
+		</FloatingBar>
 	</nav>
 
-	<div class="flex gap-1">
-		<button
-			class="btn disabled:cursor-default disabled:opacity-40"
-			title="Undo (Ctrl+Z)"
-			disabled={!planner.canUndo}
-			onclick={() => planner.undo()}>↶ Undo</button
-		>
-		<button
-			class="btn disabled:cursor-default disabled:opacity-40"
-			title="Redo (Ctrl+Shift+Z)"
-			disabled={!planner.canRedo}
-			onclick={() => planner.redo()}>↷ Redo</button
-		>
-	</div>
-
-	<div class="flex flex-wrap gap-x-3.5 gap-y-1 font-mono text-[12.5px] text-muted tabular-nums">
-		<span><b class="font-medium text-ink">{m2(g.area)}</b> room</span>
-		<span><b class="font-medium text-ink">{cm(g.W)} × {cm(g.L)}</b> cm</span>
-		<span>height <b class="font-medium text-ink">{cm(g.H)}</b></span>
-		{#if g.D > 0}<span>loggia <b class="font-medium text-ink">{m2(g.loggiaArea)}</b></span>{/if}
-	</div>
-
-	<div class="flex flex-wrap gap-1.5 max-[900px]:ml-0 min-[901px]:ml-auto">
-		{#if !planner.measured}
-			<span class="rounded-full bg-warn-soft px-[9px] py-[3px] text-xs whitespace-nowrap text-warn">
-				Estimated from floor plan
-			</span>
-		{/if}
-		<span
-			class={[
-				'rounded-full border bg-sheet px-[9px] py-[3px] text-xs whitespace-nowrap',
-				planner.saved ? 'border-line text-ok' : 'border-warn text-warn'
-			]}
-		>
-			<span class="mr-1.5 inline-block h-[7px] w-[7px] rounded-full bg-current align-[1px]"></span>
-			{planner.saved ? 'Saved in this browser' : 'Not saved – browser storage unavailable'}
-		</span>
+	<div class="flex flex-1 justify-end">
+		<FloatingBar label="History">
+			<IconButton
+				icon="undo"
+				label="Undo (Ctrl+Z)"
+				disabled={!planner.canUndo}
+				onclick={() => planner.undo()}
+			/>
+			<IconButton
+				icon="redo"
+				label="Redo (Ctrl+Shift+Z)"
+				disabled={!planner.canRedo}
+				onclick={() => planner.redo()}
+			/>
+			<span
+				class={[
+					'mx-2.5 size-2 flex-none rounded-full',
+					planner.saved ? 'bg-ok/60' : 'animate-pulse bg-warn'
+				]}
+				role="img"
+				aria-label={planner.saved
+					? 'Saved in this browser'
+					: 'Not saved – browser storage unavailable'}
+				title={planner.saved ? 'Saved in this browser' : 'Not saved – browser storage unavailable'}
+			></span>
+		</FloatingBar>
 	</div>
 </header>

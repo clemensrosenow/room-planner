@@ -96,12 +96,17 @@ export class RoomScene {
 		this.camera.updateProjectionMatrix();
 	}
 
+	/** Looks at the room from the front left, just far enough away to fit it into the view. */
 	fitCamera(g: Geometry) {
 		const depth = g.L + g.tE + g.D;
-		const size = Math.max(g.W, depth);
 		const target = new THREE.Vector3(g.W / 2, 40, depth / 2);
+		const radius = 0.5 * Math.hypot(g.W, depth, g.H);
+		const vFov = THREE.MathUtils.degToRad(this.camera.fov);
+		const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect);
+		const dist = (radius / Math.sin(Math.min(vFov, hFov) / 2)) * 1.2;
+		const dir = new THREE.Vector3(-0.55, 1.05, 1).normalize();
 		this.controls.target.copy(target);
-		this.camera.position.set(target.x - size * 0.55, size * 1.05, target.z + size);
+		this.camera.position.copy(target).addScaledVector(dir, dist);
 		this.controls.update();
 	}
 
@@ -439,7 +444,7 @@ function labelSprite(text: string, size: number, strong: boolean) {
 	const x = c.getContext('2d')!;
 	const px = 44;
 	const pad = 16;
-	const font = `${strong ? 600 : 500} ${px}px ${strong ? 'Archivo' : 'IBM Plex Mono'}, sans-serif`;
+	const font = `${strong ? 600 : 500} ${px}px Manrope, system-ui, sans-serif`;
 	x.font = font;
 	const w = Math.ceil(x.measureText(text).width) + pad * 2;
 	const h = px + pad * 1.2;

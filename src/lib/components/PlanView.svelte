@@ -170,7 +170,7 @@
 	>
 		<defs>
 			<pattern id="grid50" width="50" height="50" patternUnits="userSpaceOnUse">
-				<path d="M50 0H0V50" class="grid" vector-effect="non-scaling-stroke" opacity=".55" />
+				<path d="M50 0H0V50" class="grid" vector-effect="non-scaling-stroke" />
 			</pattern>
 		</defs>
 
@@ -289,6 +289,7 @@
 				y={-f.d / 2}
 				width={f.w}
 				height={f.d}
+				rx={Math.min(6, f.w / 6, f.d / 6)}
 				style:fill="var({PALETTE[f.color % PALETTE.length]})"
 				transform="translate({f.cx} {f.cy}) rotate({f.rot})"
 			/>
@@ -397,45 +398,43 @@
 	}
 	.dimt {
 		fill: var(--muted);
-		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 	}
 	.label {
 		fill: var(--muted);
-		font-stretch: 75%;
 		font-weight: 600;
-		letter-spacing: 0.06em;
+		letter-spacing: 0.08em;
 		text-transform: uppercase;
+		opacity: 0.8;
 	}
 	.furn {
-		stroke: var(--ink);
+		stroke: color-mix(in srgb, var(--ink) 25%, transparent);
 		stroke-width: 1;
-		fill-opacity: 0.55;
 		cursor: grab;
+		filter: drop-shadow(0 2px 3px rgb(60 45 30 / 0.18));
 	}
 	.furn.sel {
 		stroke: var(--accent);
-		stroke-width: 2.2;
+		stroke-width: 2.5;
 	}
 	.furn.bad {
 		stroke: var(--warn);
 		stroke-width: 2;
-		stroke-dasharray: 5 3;
 	}
 	.furn-name {
 		fill: var(--ink);
+		font-weight: 600;
 		pointer-events: none;
 	}
 	.furn-dim {
 		fill: var(--ink);
-		font-family: var(--font-mono);
-		opacity: 0.8;
+		opacity: 0.55;
 		pointer-events: none;
 	}
 	.readonly .furn {
 		cursor: default;
-		fill-opacity: 0.25;
-		stroke-opacity: 0.35;
+		opacity: 0.35;
+		filter: none;
 	}
 	.readonly :is(.furn-name, .furn-dim) {
 		opacity: 0.4;
@@ -447,7 +446,6 @@
 	}
 	.distt {
 		fill: var(--accent);
-		font-family: var(--font-mono);
-		font-weight: 500;
+		font-weight: 600;
 	}
 </style>

@@ -42,7 +42,7 @@ src/
     room/                 step 1: room shape
     furnish/              step 2: furniture (view + selection in the URL, move/rotate keys)
     experience/           step 3: realistic preview
-    layout.css            Tailwind + color tokens (light/dark)
+    layout.css            Tailwind + design tokens (warm palette, light/dark)
   lib/
     url.ts                steps, query param and selection helpers
     planner/              plain logic, no UI
@@ -60,10 +60,12 @@ src/
       sun.ts              sun position and color by time of day
       materials.ts        procedural textures (wood, plaster, concrete)
     components/
-      Header.svelte, Workspace.svelte (canvas + side panel)
+      Header.svelte, Workspace.svelte (full-screen canvas, floating
+                            controls, side panel / bottom sheet)
       PlanView.svelte, Scene3D.svelte, Preview.svelte
       RoomSettings.svelte, FurnitureList.svelte, FurnitureCard.svelte
-      ui/                 NumberField, SelectField, Section, ConfirmButton
+      ui/                 ScrubValue (drag/type number), Segmented, Switch,
+                            FloatingBar, IconButton, Icon, ConfirmButton
 ```
 
 Coordinates are in cm. Origin is the top-left inner corner of the room; y grows towards the loggia. In 3D, plan (x, y) maps to world (x, z).
