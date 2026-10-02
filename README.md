@@ -1,54 +1,39 @@
-# sv
+# Room Planner
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Interactive planner for one room: enter the room dimensions, add furniture boxes and arrange them in a 3D view or a 2D floor plan. Warns when a piece sticks out of the room, overlaps another piece or blocks a door's swing area.
 
-## Creating a project
+Built with SvelteKit (Svelte 5), TailwindCSS v4 and three.js. Runs fully in the browser; data is saved in `localStorage`.
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
+## Develop
 
 ```sh
-# recreate this project
-npx sv@1.0.1 create --template minimal --types ts --add tailwindcss="plugins:none" sveltekit-adapter="adapter:static" prettier --install npm .
+npm install
+npm run dev      # dev server
+npm run check    # type check
+npm run build    # static site in build/
 ```
 
-## Adding features
+## Structure
 
-Add features to your project with `sv add`:
-
-```sh
-npx sv add
+```
+src/
+  routes/
+    +page.svelte          page layout, toolbar, keyboard shortcuts, auto-save
+    +layout.ts            client-only, prerendered (static)
+    layout.css            Tailwind + color tokens (light/dark)
+  lib/
+    planner/              plain logic, no UI
+      types.ts            RoomConfig, Furniture
+      defaults.ts         starting values and palette
+      geometry.ts         room inputs -> clamped geometry, walls, doors
+      furniture.ts        footprint math, collision/door checks, edits
+      storage.ts          load/save (localStorage)
+      planner.svelte.ts   reactive app state (single `planner` instance)
+      scene3d.ts          three.js scene (RoomScene class)
+    components/
+      Header.svelte, PlanView.svelte, Scene3D.svelte
+      RoomSettings.svelte, FurnitureList.svelte, FurnitureCard.svelte
+      ui/                 NumberField, SelectField, Section, ConfirmButton
 ```
 
-For example, to add Tailwind CSS:
-
-```sh
-npx sv add tailwindcss
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
+Coordinates are in cm. Origin is the top-left inner corner of the room; y grows towards the loggia. In 3D, plan (x, y) maps to world (x, z).

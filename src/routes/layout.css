@@ -1,1 +1,114 @@
 @import 'tailwindcss';
+
+/* Colors are CSS variables so the 3D scene can read them too (see cssVar). */
+@theme inline {
+	--color-paper: var(--paper);
+	--color-sheet: var(--sheet);
+	--color-ink: var(--ink);
+	--color-muted: var(--muted);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-accent: var(--accent);
+	--color-accent-soft: var(--accent-soft);
+	--color-warn: var(--warn);
+	--color-warn-soft: var(--warn-soft);
+	--color-ok: var(--ok);
+	--font-sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+:root {
+	--paper: #edf0f3;
+	--sheet: #f9fafb;
+	--ink: #1a2332;
+	--muted: #5b6677;
+	--line: #d3d9e1;
+	--line-strong: #a9b3c0;
+	--accent: #2a45b8;
+	--accent-soft: #e2e7fa;
+	--warn: #b4460e;
+	--warn-soft: #fbe8dd;
+	--ok: #2c7549;
+	--wall: #283041;
+	--wall3d: #f3f4f6;
+	--floor: #ffffff;
+	--loggia: #e1e5ea;
+	--glass: #5b9cc0;
+	--scene: #e3e7ec;
+	--grid: #e3e8ee;
+	--grid-strong: #c9d1db;
+	--f1: #c49f72;
+	--f2: #86a1c2;
+	--f3: #90b18f;
+	--f4: #c69292;
+	--f5: #a99ac4;
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--paper: #12161c;
+		--sheet: #1a1f27;
+		--ink: #e3e8ef;
+		--muted: #97a2b2;
+		--line: #2b333e;
+		--line-strong: #465161;
+		--accent: #8196f3;
+		--accent-soft: #232c4d;
+		--warn: #f29357;
+		--warn-soft: #3a2418;
+		--ok: #62c38b;
+		--wall: #c5cdd8;
+		--wall3d: #3b4350;
+		--floor: #232a33;
+		--loggia: #2a313b;
+		--glass: #6fb3d6;
+		--scene: #161b22;
+		--grid: #2a313b;
+		--grid-strong: #3a4350;
+		--f1: #b8936a;
+		--f2: #7d97b8;
+		--f3: #86a685;
+		--f4: #b98787;
+		--f5: #9d8fb8;
+		color-scheme: dark;
+	}
+}
+
+@layer base {
+	html,
+	body {
+		height: 100%;
+	}
+	body {
+		@apply bg-paper font-sans text-sm leading-normal text-ink;
+	}
+	:focus-visible {
+		@apply outline-2 outline-offset-2 outline-accent;
+	}
+	@media (max-width: 900px) {
+		html,
+		body {
+			height: auto;
+		}
+	}
+}
+
+/* Shared form controls */
+@layer components {
+	.btn {
+		@apply cursor-pointer rounded-[5px] border border-line-strong bg-transparent px-[11px] py-1.5 text-[13px] hover:border-ink;
+	}
+	.btn-primary {
+		@apply border-accent bg-accent font-semibold text-sheet hover:border-accent;
+	}
+	.btn-danger {
+		@apply text-warn;
+	}
+	.btn-confirm {
+		@apply border-warn bg-warn text-sheet;
+	}
+	.input {
+		@apply w-full rounded-[5px] border border-line-strong bg-paper px-2 py-1.5 text-[13.5px] focus:border-accent focus:outline-none;
+	}
+}
