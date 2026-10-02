@@ -2,6 +2,8 @@
 
 Interactive planner for one room: enter the room dimensions, add furniture boxes and arrange them in a 3D view or a 2D floor plan. Warns when a piece sticks out of the room, overlaps another piece or blocks a door's swing area.
 
+Shortcuts: drag to move (snaps to walls/furniture, hold Alt for free), arrow keys move 1 cm (Shift 10 cm), R rotates 90°, Esc deselects, Ctrl+Z / Ctrl+Shift+Z undo/redo.
+
 Built with SvelteKit (Svelte 5), TailwindCSS v4 and three.js. Runs fully in the browser; data is saved in `localStorage`.
 
 ## Develop

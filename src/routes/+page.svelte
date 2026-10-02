@@ -16,9 +16,18 @@
 
 	/** Arrow keys move the selected piece (1 cm, Shift 10 cm), R rotates, Esc deselects. */
 	function onkeydown(e: KeyboardEvent) {
-		const f = planner.selected;
 		const t = e.target as HTMLElement;
-		if (!f || ['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName) || t.isContentEditable) return;
+		// Inside form fields the browser's own shortcuts apply
+		if (['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName) || t.isContentEditable) return;
+		const key = e.key.toLowerCase();
+		if ((e.ctrlKey || e.metaKey) && (key === 'z' || key === 'y')) {
+			e.preventDefault();
+			if (key === 'y' || e.shiftKey) planner.redo();
+			else planner.undo();
+			return;
+		}
+		const f = planner.selected;
+		if (!f) return;
 		const step = e.shiftKey ? 10 : 1;
 		if (e.key === 'ArrowLeft') f.cx -= step;
 		else if (e.key === 'ArrowRight') f.cx += step;
@@ -59,6 +68,20 @@
 						onclick={() => planner.setView(v)}>{label}</button
 					>
 				{/each}
+			</div>
+			<div class="flex gap-1">
+				<button
+					class="tbtn disabled:cursor-default disabled:opacity-40"
+					title="Undo (Ctrl+Z)"
+					disabled={!planner.canUndo}
+					onclick={() => planner.undo()}>↶ Undo</button
+				>
+				<button
+					class="tbtn disabled:cursor-default disabled:opacity-40"
+					title="Redo (Ctrl+Shift+Z)"
+					disabled={!planner.canRedo}
+					onclick={() => planner.redo()}>↷ Redo</button
+				>
 			</div>
 			{#if planner.view === '3d'}
 				<button class="tbtn" aria-pressed={lowWalls} onclick={() => (lowWalls = !lowWalls)}>
@@ -112,7 +135,7 @@
 		padding: 5px 10px;
 		font-size: 13px;
 	}
-	.tbtn:hover {
+	.tbtn:hover:not(:disabled) {
 		border-color: var(--line-strong);
 	}
 	.tbtn[aria-pressed='true'] {

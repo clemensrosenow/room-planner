@@ -14,6 +14,15 @@ class Planner {
 	selectedId = $state<string | null>(null);
 	view = $state<View>('3d');
 	saved = $state(true);
+	canUndo = $state(false);
+	canRedo = $state(false);
+
+	/* Undo history as JSON snapshots; `current` is the state shown now */
+	private past: string[] = [];
+	private future: string[] = [];
+	private current = '';
+	private latest = '';
+	private pending: ReturnType<typeof setTimeout> | undefined;
 
 	geo = $derived(computeGeometry(this.cfg));
 	checks = $derived<Record<string, FurnitureCheck>>(
@@ -30,10 +39,57 @@ class Planner {
 		if (loadView() === 'plan') this.view = 'plan';
 	}
 
+	/** Persists the data and records an undo step. Called on every change. */
 	save() {
-		this.saved = saveData(
-			$state.snapshot({ cfg: this.cfg, furn: this.furn, measured: this.measured })
-		);
+		const data = $state.snapshot({ cfg: this.cfg, furn: this.furn, measured: this.measured });
+		this.saved = saveData(data);
+		this.latest = JSON.stringify(data);
+		if (!this.current) this.current = this.latest;
+		// Changes in quick succession (a drag, typing) become one undo step
+		clearTimeout(this.pending);
+		this.pending = setTimeout(() => this.commit(), 400);
+	}
+
+	private commit() {
+		clearTimeout(this.pending);
+		this.pending = undefined;
+		if (this.latest === this.current) return;
+		this.past.push(this.current);
+		if (this.past.length > 100) this.past.shift();
+		this.current = this.latest;
+		this.future = [];
+		this.updateHistoryFlags();
+	}
+
+	undo() {
+		this.commit();
+		const prev = this.past.pop();
+		if (!prev) return;
+		this.future.push(this.current);
+		this.restore(prev);
+	}
+
+	redo() {
+		this.commit();
+		const next = this.future.pop();
+		if (!next) return;
+		this.past.push(this.current);
+		this.restore(next);
+	}
+
+	private restore(json: string) {
+		this.current = this.latest = json;
+		const d = JSON.parse(json);
+		this.cfg = d.cfg;
+		this.furn = d.furn;
+		this.measured = d.measured;
+		if (!this.furn.some((f) => f.id === this.selectedId)) this.selectedId = null;
+		this.updateHistoryFlags();
+	}
+
+	private updateHistoryFlags() {
+		this.canUndo = this.past.length > 0;
+		this.canRedo = this.future.length > 0;
 	}
 
 	setView(v: View) {
