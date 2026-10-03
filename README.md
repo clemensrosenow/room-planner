@@ -44,7 +44,7 @@ npm install
 npm run dev      # dev server
 npm run check    # type check
 npm run lint     # formatting
-npm run build    # static site in build/
+npm run build    # Vercel output in .vercel/output/
 ```
 
 ## Structure
@@ -53,7 +53,7 @@ npm run build    # static site in build/
 src/
   routes/
     +layout.svelte        header, step transitions, undo/redo shortcuts, auto-save
-    +layout.ts            client-only, prerendered (static)
+    +layout.ts            client-only, prerendered (served statically on Vercel)
     +page.ts              redirects to the last visited step
     room/                 step 1: room shape (part in ?focus=)
     furnish/              step 2: furniture (view, selection and details in the URL, keys)
