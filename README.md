@@ -4,7 +4,7 @@ Plan one room in three steps, each on its own page. The room fills the screen; c
 
 1. **Shape** (`/room`): shape the room right on the floor plan. Drag the right wall (width), the front wall (length), the hallway corner, the doors (move them, or drag their ends for the width), where the glass starts and ends, and the loggia parapet (depth). The part you touch shows its measurements in a small card next to it: drag a value sideways, use the arrow keys or click it to type. Hinge and swing toggle there too. The side panel keeps what the plan can't show (heights, wall thickness, measured status).
 2. **Furnish** (`/furnish`): drag furniture from the catalog dock into the room (or click a tile) and arrange it in 3D or on the floor plan. The selected piece gets a floating toolbar (rotate, color, duplicate, details, delete); on the plan it also has resize handles and a rotation knob. Pieces that stick out of the room, overlap or block a door glow red, the blocked door's swing area turns red, and the toolbar says why. The details panel has name, type, color and exact sizes.
-3. **Experience** (`/experience`): the closed room, realistically lit, for cinematic shots. Preset viewpoints (door, window, corners, above) with smooth camera glides, a looping camera tour (controls fade out) and a first-person walk mode.
+3. **Experience** (`/experience`): the closed room, realistically lit, for cinematic shots. Preset viewpoints (door, window, corners, above) with smooth camera glides, a looping camera tour (controls fade out). You always stay inside the room: drag to look, ↑↓ to walk, ←→ to turn, scroll or pinch to zoom; only the "above" shot shows the room from outside.
    - Light: sun and sky follow the time-of-day slider in German clock time (glass front faces east, ~51°N, today's date), daylight through the glass, a warm bounce off the sunlit floor, reflections of the real sky, eye-like exposure adaptation at dusk, and a ceiling lamp.
    - Furniture is modelled by its type: bed, sofa, desk, chair, wardrobe, shelf (with books), nightstand, or a plain box. Older pieces without a type are recognised by name, in English or German (Bett, Schrank, Regal, ...).
    - Details: skirting boards, door casing and light switch, drifting clouds, trees and buildings outside.
@@ -20,7 +20,7 @@ The URL holds what you are looking at, so Back, reload and links work. `/` reope
 | `/furnish?item=<id>`                        | selected piece (Back or Esc deselects)                                  |
 | `/furnish?item=<id>&details=1`              | details panel with exact sizes                                          |
 | `/experience?shot=window&time=18h30&lamp=1` | viewpoint, clock time, ceiling lamp                                     |
-| `/experience?mode=tour`                     | start the camera tour (or `walk`)                                       |
+| `/experience?mode=tour`                     | start the camera tour                                                   |
 
 ## Shortcuts
 

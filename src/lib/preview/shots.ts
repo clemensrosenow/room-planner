@@ -48,7 +48,7 @@ export function makeShots(g: Geometry): Shot[] {
 		shots.push({
 			id: 'corner' + n,
 			label: 'Corner ' + n++,
-			pos: [p[0] + ix * 40, EYE + 20, p[1] + iy * 40],
+			pos: [p[0] + ix * 40, EYE, p[1] + iy * 40],
 			target: [cx, 80, cy]
 		});
 	});

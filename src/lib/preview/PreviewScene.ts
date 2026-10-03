@@ -17,14 +17,23 @@ import type { Shot } from './shots';
 import { dayOfYear, sunDirection, sunLight } from './sun';
 import { WalkControls } from './WalkControls';
 
-export type CameraMode = 'orbit' | 'tour' | 'walk';
+/** walk: first person inside the room; overview: orbit above the room (the only view outside) */
+export type CameraMode = 'walk' | 'tour' | 'overview';
 
 interface CameraState {
 	pos: THREE.Vector3;
 	target: THREE.Vector3;
 }
 
+interface Pose {
+	pos: THREE.Vector3;
+	quat: THREE.Quaternion;
+}
+
 const GLIDE = 2.2; // seconds between shots
+/** Overview orbit: lowest view, measured from straight down */
+const OVERVIEW_MAX_POLAR = Math.PI * 0.3;
+const UP = new THREE.Vector3(0, 1, 0);
 
 /** Replaces NaN/Infinity with black and caps extreme HDR values. */
 const SanitizeShader = {
@@ -51,14 +60,32 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 const toWorld = ([x, h, y]: [number, number, number]) =>
 	new THREE.Vector3(x, h, y).multiplyScalar(0.01);
 
+/** Camera orientation at `pos` looking at `target`. */
+const lookQuat = (pos: THREE.Vector3, target: THREE.Vector3) =>
+	new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, target, UP));
+
+/** Point at fraction `k` of the way along a polyline. */
+function along(path: THREE.Vector3[], k: number, out: THREE.Vector3) {
+	const lens = path.slice(1).map((p, i) => p.distanceTo(path[i]));
+	let d = k * lens.reduce((a, b) => a + b, 0);
+	for (let i = 0; i < lens.length; i++) {
+		if (d <= lens[i] || i === lens.length - 1)
+			return out.lerpVectors(path[i], path[i + 1], lens[i] ? Math.min(1, d / lens[i]) : 1);
+		d -= lens[i];
+	}
+	return out.copy(path[0]);
+}
+
 /**
  * Realistic, closed version of the room for cinematic previews. Everything is modelled
  * in cm inside `root` (scaled to meters), so physical light units work.
  */
 export class PreviewScene {
-	mode: CameraMode = 'orbit';
+	mode: CameraMode = 'walk';
 	/** Called when the mode changes by itself (e.g. the user interrupts the tour) */
 	onModeChange: (mode: CameraMode) => void = () => {};
+	/** Called when the user moves or turns by hand, leaving the chosen viewpoint */
+	onManual: () => void = () => {};
 
 	private renderer: THREE.WebGLRenderer;
 	private composer: EffectComposer;
@@ -100,7 +127,12 @@ export class PreviewScene {
 	private lastTime = performance.now();
 	private frame = 0;
 
-	private glide: { from: CameraState; to: CameraState; t: number } | null = null;
+	private glide: {
+		path: THREE.Vector3[];
+		from: THREE.Quaternion;
+		to: THREE.Quaternion;
+		t: number;
+	} | null = null;
 	private tour: { shots: Shot[]; index: number; t: number; base: CameraState } | null = null;
 
 	constructor(private el: HTMLElement) {
@@ -193,19 +225,18 @@ export class PreviewScene {
 		vignette.uniforms.darkness.value = 0.85;
 		this.composer.addPass(vignette);
 
+		// Only used for the overview: orbit above the room, never down past the walls
 		this.controls = new OrbitControls(this.camera, r.domElement);
+		this.controls.enabled = false;
 		this.controls.enableDamping = true;
 		this.controls.dampingFactor = 0.08;
-		this.controls.minDistance = 0.3;
-		this.controls.maxDistance = 25;
-		this.controls.maxPolarAngle = Math.PI * 0.95;
-		// Any manual camera input ends the tour
-		r.domElement.addEventListener('pointerdown', () => {
-			if (this.mode === 'tour') this.setMode('orbit', true);
-		});
+		this.controls.enablePan = false;
+		this.controls.maxPolarAngle = OVERVIEW_MAX_POLAR;
 		this.controls.addEventListener('start', () => (this.glide = null));
 
 		this.walk = new WalkControls(this.camera, r.domElement, (x, y) => this.canStand(x, y));
+		this.walk.enabled = true;
+		this.walk.onInput = () => this.onWalkInput();
 
 		this.resizeObserver = new ResizeObserver(() => this.resize());
 		this.resizeObserver.observe(el);
@@ -246,6 +277,28 @@ export class PreviewScene {
 		this.composer.setSize(w, h);
 		this.bloom.resolution.set(w, h);
 		this.camera.aspect = w / h;
+		this.updateFov(1);
+	}
+
+	/**
+	 * Inside, the horizontal view stays the same on any screen shape: wider in small rooms,
+	 * narrower in big ones, scaled by the user's zoom. Above the room a calmer lens is used.
+	 */
+	private updateFov(dt: number) {
+		const g = this.geo;
+		const deg = THREE.MathUtils.degToRad;
+		const fromH = (h: number) => (2 * Math.atan(h / this.camera.aspect) * 180) / Math.PI;
+		let fov: number;
+		if (!g || this.camera.position.y > g.H / 100) {
+			fov = THREE.MathUtils.clamp(fromH(Math.tan(deg(37.5))), 50, 90);
+		} else {
+			const size = Math.max(g.W, g.L);
+			const hfov = THREE.MathUtils.clamp(95 - ((size - 300) * 25) / 400, 70, 95);
+			fov = THREE.MathUtils.clamp(fromH(Math.tan(deg(hfov / 2)) * this.walk.zoom), 25, 95);
+		}
+		const next = this.camera.fov + (fov - this.camera.fov) * Math.min(1, dt * 8);
+		if (Math.abs(next - this.camera.fov) < 1e-3 && dt < 1) return;
+		this.camera.fov = next;
 		this.camera.updateProjectionMatrix();
 	}
 
@@ -378,6 +431,12 @@ export class PreviewScene {
 
 		this.sun.target.position.set(g.W / 200, 0, g.L / 200);
 		this.setTime(this.hours);
+
+		// Overview distance: close enough to fill the view, never below the top of the walls
+		const size = Math.max(g.W, g.L) / 100;
+		this.controls.minDistance = Math.max(size, (g.H / 100 + 0.5) / Math.cos(OVERVIEW_MAX_POLAR));
+		this.controls.maxDistance = Math.max(size * 2.5, this.controls.minDistance * 1.5);
+		this.updateFov(1);
 	}
 
 	/* ---------- Lighting ---------- */
@@ -451,107 +510,165 @@ export class PreviewScene {
 
 	setMode(mode: CameraMode, notify = false) {
 		if (this.mode === mode) return;
-		if (this.mode === 'walk') {
-			// Orbit around a point just in front of where we stood
-			const ahead = new THREE.Vector3(0, 0, -1.5).applyQuaternion(this.camera.quaternion);
-			this.controls.target.copy(this.camera.position).add(ahead);
-		}
 		this.mode = mode;
 		this.tour = null;
 		this.walk.enabled = mode === 'walk';
-		this.controls.enabled = mode === 'orbit';
+		this.controls.enabled = mode === 'overview';
 		if (mode === 'walk') {
-			this.glide = null;
-			this.walk.start();
+			// A glide that is still outside the room (coming down from above) finishes first
+			if (this.glide && this.isInside()) this.glide = null;
+			this.walk.reset();
 		}
 		if (notify) this.onModeChange(mode);
 	}
 
-	/** Glides to a shot (orbit mode), or jumps there with `instant`. */
+	/** Glides to a shot, or jumps there with `instant`. The cutaway shot opens the overview. */
 	goTo(shot: Shot, instant = false) {
-		this.setMode('orbit', true);
-		if (!instant) return this.startGlide(shot);
+		this.setMode(shot.cutaway ? 'overview' : 'walk', true);
 		const state = this.shotState(shot);
+		if (shot.cutaway) this.controls.target.copy(state.target);
+		const quat = lookQuat(state.pos, state.target);
+		if (!instant) return this.startGlide({ pos: state.pos, quat });
 		this.glide = null;
 		this.camera.position.copy(state.pos);
-		this.controls.target.copy(state.target);
-		this.camera.lookAt(state.target);
+		this.camera.quaternion.copy(quat);
+		this.walk.sync();
 	}
 
 	startTour(shots: Shot[]) {
 		this.setMode('tour');
-		this.controls.enabled = false;
 		this.tour = { shots, index: 0, t: 0, base: this.shotState(shots[0]) };
-		this.startGlide(shots[0]);
+		this.startGlide(this.holdPose(this.tour.base, 0));
 	}
 
 	private shotState(shot: Shot): CameraState {
-		return { pos: toWorld(shot.pos), target: toWorld(shot.target) };
+		const state = { pos: toWorld(shot.pos), target: toWorld(shot.target) };
+		if (shot.cutaway) {
+			// Keep the overview within the orbit limits, so it doesn't jump when touched
+			const off = state.pos.clone().sub(state.target);
+			const { minDistance, maxDistance } = this.controls;
+			off.setLength(THREE.MathUtils.clamp(off.length(), minDistance, maxDistance));
+			state.pos.copy(state.target).add(off);
+		}
+		return state;
 	}
 
-	private startGlide(shot: Shot) {
+	private startGlide(to: Pose) {
 		this.glide = {
-			from: { pos: this.camera.position.clone(), target: this.controls.target.clone() },
-			to: this.shotState(shot),
+			path: this.route(this.camera.position.clone(), to.pos),
+			from: this.camera.quaternion.clone(),
+			to: to.quat,
 			t: 0
 		};
 	}
 
+	/**
+	 * Path between two camera positions that never leaves the room: around the inner corner
+	 * of an L-shaped room, and up or down through the ceiling to the overview.
+	 */
+	private route(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
+		const g = this.geo;
+		if (!g) return [from, to];
+		const ceiling = g.H / 100;
+		const fromAbove = from.y > ceiling;
+		const toAbove = to.y > ceiling;
+		if (fromAbove && toAbove) return [from, to];
+		if (fromAbove || toAbove) {
+			const inside = fromAbove ? to : from;
+			return [from, new THREE.Vector3(inside.x, ceiling + 0.6, inside.z), to];
+		}
+		if (this.isClear(from, to) || !g.hasNotch) return [from, to];
+		// A point in both the main part and the strip beside the hallway corner sees everywhere
+		const via = new THREE.Vector3(
+			Math.min(g.NW + 60, (g.NW + g.W) / 2) / 100,
+			(from.y + to.y) / 2,
+			Math.min(g.N + 60, (g.N + g.L) / 2) / 100
+		);
+		return [from, via, to];
+	}
+
+	/** Whether a straight walk between two points (meters) stays inside the room. */
+	private isClear(a: THREE.Vector3, b: THREE.Vector3) {
+		const steps = Math.ceil(a.distanceTo(b) / 0.1);
+		for (let i = 0; i <= steps; i++) {
+			const k = steps ? i / steps : 0;
+			if (!this.canStand((a.x + (b.x - a.x) * k) * 100, (a.z + (b.z - a.z) * k) * 100))
+				return false;
+		}
+		return true;
+	}
+
+	private isInside() {
+		const p = this.camera.position;
+		return !this.geo || (p.y <= this.geo.H / 100 && this.canStand(p.x * 100, p.z * 100));
+	}
+
+	/** Keys, drag, wheel or pinch: ends the tour and any glide, so the user takes over. */
+	private onWalkInput() {
+		if (this.mode === 'tour') this.setMode('walk', true);
+		if (this.mode !== 'walk') return;
+		if (this.glide && this.isInside()) {
+			this.glide = null;
+			this.walk.sync();
+		}
+		this.onManual();
+	}
+
 	private update(dt: number) {
-		if (this.mode === 'walk') {
-			this.walk.update(dt);
-		} else if (this.glide) {
+		if (this.glide) {
 			const gl = this.glide;
 			gl.t = Math.min(1, gl.t + dt / GLIDE);
 			const k = ease(gl.t);
-			this.camera.position.lerpVectors(gl.from.pos, gl.to.pos, k);
-			this.controls.target.lerpVectors(gl.from.target, gl.to.target, k);
-			this.camera.lookAt(this.controls.target);
-			if (gl.t >= 1) this.glide = null;
+			along(gl.path, k, this.camera.position);
+			this.camera.quaternion.slerpQuaternions(gl.from, gl.to, k);
+			if (gl.t >= 1) {
+				this.glide = null;
+				if (this.mode === 'walk') this.walk.sync();
+			}
+		} else if (this.mode === 'walk') {
+			this.walk.update(dt);
 		} else if (this.tour) {
 			this.updateTour(dt);
 		} else {
 			this.controls.update();
 		}
+		this.updateFov(dt);
 		// Look into the room from above
 		if (this.ceiling && this.shade && this.geo)
 			this.ceiling.visible = this.shade.visible = this.camera.position.y < this.geo.H / 100 + 0.02;
 	}
 
-	/** Slow push-in and drift around the target, then glide to the next shot. */
+	/** Slow push-in while panning across the view, then glide to the next shot. */
 	private updateTour(dt: number) {
 		const tour = this.tour!;
 		tour.t = Math.min(1, tour.t + dt / HOLD);
-		const k = ease(tour.t);
-		const { pos, target } = tour.base;
-		const offset = pos.clone().sub(target);
-		offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(10) * (k - 0.5) * 2);
-		offset.multiplyScalar(1 - 0.12 * k);
-		this.camera.position.copy(target).add(offset);
-		this.controls.target.copy(target);
-		this.camera.lookAt(target);
+		const pose = this.holdPose(tour.base, ease(tour.t));
+		this.camera.position.copy(pose.pos);
+		this.camera.quaternion.copy(pose.quat);
 		if (tour.t >= 1) {
 			tour.index = (tour.index + 1) % tour.shots.length;
 			tour.t = 0;
-			const next = tour.shots[tour.index];
-			// Start the drift at its beginning so the glide ends where the hold starts
-			const state = this.shotState(next);
-			const start = state.pos.clone().sub(state.target);
-			start.applyAxisAngle(new THREE.Vector3(0, 1, 0), -THREE.MathUtils.degToRad(10));
-			tour.base = state;
-			this.glide = {
-				from: { pos: this.camera.position.clone(), target: this.controls.target.clone() },
-				to: { pos: state.target.clone().add(start), target: state.target },
-				t: 0
-			};
+			tour.base = this.shotState(tour.shots[tour.index]);
+			// The glide ends where the next hold starts
+			this.startGlide(this.holdPose(tour.base, 0));
 		}
 	}
 
-	/** Walk mode collision: stay 25 cm away from the walls. Plan coordinates in cm. */
+	/** Camera during a tour shot at progress `k`: 12% closer to the target, panning 20°. */
+	private holdPose({ pos, target }: CameraState, k: number): Pose {
+		const dir = target.clone().sub(pos);
+		const end = pos.clone().addScaledVector(dir, 0.12);
+		const push = this.isClear(pos, end) ? 0.12 : 0;
+		const p = pos.clone().addScaledVector(dir, push * k);
+		dir.applyAxisAngle(UP, THREE.MathUtils.degToRad(10) * (2 * k - 1));
+		return { pos: p, quat: lookQuat(p, p.clone().add(dir)) };
+	}
+
+	/** Walk collision: stay 20 cm away from the walls. Plan coordinates in cm. */
 	private canStand(x: number, y: number) {
 		const g = this.geo;
 		if (!g) return true;
-		const m = 25;
+		const m = 20;
 		const inMain = x > m && x < g.W - m && y > (g.hasNotch ? g.N : 0) + m && y < g.L - m;
 		const inNotch = g.hasNotch && x > g.NW + m && x < g.W - m && y > m && y < g.L - m;
 		return inMain || inNotch;
@@ -560,10 +677,6 @@ export class PreviewScene {
 	/** Holds a walk key from the on-screen pad. */
 	press(key: string, down: boolean) {
 		this.walk.press(key, down);
-	}
-
-	walkFrom(shot: Shot) {
-		this.walk.place(shot.pos, shot.target);
 	}
 }
 
