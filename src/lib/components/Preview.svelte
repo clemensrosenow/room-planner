@@ -190,12 +190,7 @@
 				<span class="w-14 text-center text-[13px] font-semibold">{formatTime(hours)}</span>
 				<!-- After dark the lamp button glows softly as a hint -->
 				<span class={['rounded-full', !isDay && !lamp && 'ring-2 ring-accent/60']}>
-					<IconButton
-						icon="lamp"
-						label="Ceiling lamp"
-						pressed={lamp}
-						onclick={() => (lamp = !lamp)}
-					/>
+					<IconButton icon="lamp" label="Lights" pressed={lamp} onclick={() => (lamp = !lamp)} />
 				</span>
 			</FloatingBar>
 

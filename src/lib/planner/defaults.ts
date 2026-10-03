@@ -17,24 +17,24 @@ export const DEFAULT_CFG: RoomConfig = {
 export const DEFAULT_FURN: Furniture[] = [
 	{
 		id: 'f1',
-		name: 'Bed (example)',
+		name: 'Boxspring bed',
 		kind: 'bed',
 		w: 140,
-		d: 200,
-		h: 45,
+		d: 210,
+		h: 50,
 		cx: 280,
-		cy: 260,
+		cy: 240,
 		rot: 0,
 		color: 0
 	},
 	{
 		id: 'f2',
-		name: 'Desk (example)',
+		name: 'Desk',
 		kind: 'desk',
-		w: 140,
-		d: 70,
-		h: 75,
-		cx: 35,
+		w: 125,
+		d: 50,
+		h: 78,
+		cx: 25,
 		cy: 330,
 		rot: 90,
 		color: 1

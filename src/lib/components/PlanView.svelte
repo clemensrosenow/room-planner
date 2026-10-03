@@ -523,7 +523,7 @@
 				>
 					<title>Drag to rotate (15° steps, Alt: free)</title>
 				</circle>
-				{#each HANDLES as h (h.id)}
+				{#each sel.model ? [] : HANDLES as h (h.id)}
 					<circle
 						class="handle"
 						data-handle={h.id}
