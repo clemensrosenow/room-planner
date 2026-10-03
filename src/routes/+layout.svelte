@@ -3,14 +3,15 @@
 	import { afterNavigate, onNavigate } from '$app/navigation';
 	import favicon from '#lib/assets/favicon.svg';
 	import Header from '#lib/components/Header.svelte';
+	import Toaster from '#lib/components/ui/Toaster.svelte';
 	import { planner } from '#lib/planner/planner.svelte.ts';
+	import { page } from '$app/state';
 	import { saveStep } from '#lib/planner/storage.ts';
 	import { STEPS } from '#lib/url.ts';
 
 	let { children } = $props();
 
-	// Every change keeps the furniture within the walls (arrow keys, rotating, resizing,
-	// a smaller room) and is saved
+	// Every change keeps the furniture within the walls (arrow keys, rotating) and is saved
 	$effect(() => {
 		planner.keepAllInside();
 		planner.save();
@@ -37,10 +38,10 @@
 		});
 	});
 
-	/** Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y work everywhere except inside form fields. */
+	/** Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y work on the steps, except inside form fields. */
 	function onkeydown(e: KeyboardEvent) {
 		const t = e.target as HTMLElement;
-		if (e.defaultPrevented) return;
+		if (e.defaultPrevented || !STEPS.some((s) => s.path === page.url.pathname)) return;
 		if (['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName) || t.isContentEditable) return;
 		const key = e.key.toLowerCase();
 		if (!(e.ctrlKey || e.metaKey) || (key !== 'z' && key !== 'y')) return;
@@ -63,3 +64,4 @@
 		{@render children()}
 	</main>
 </div>
+<Toaster />
