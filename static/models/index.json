@@ -1,0 +1,54 @@
+[
+	{
+		"id": "ikea-kallax",
+		"file": "/models/ikea-kallax.glb",
+		"size": {
+			"w": 69,
+			"d": 31,
+			"h": 132
+		},
+		"mount": "floor",
+		"triangles": 378,
+		"trianglesBefore": 378,
+		"bytes": 6424
+	},
+	{
+		"id": "ikea-nymo-lamp",
+		"file": "/models/ikea-nymo-lamp.glb",
+		"size": {
+			"w": 25,
+			"d": 25,
+			"h": 70
+		},
+		"mount": "floor",
+		"triangles": 95006,
+		"trianglesBefore": 210678,
+		"bytes": 864960
+	},
+	{
+		"id": "ikea-skaftet-lamp",
+		"file": "/models/ikea-skaftet-lamp.glb",
+		"size": {
+			"w": 122.1,
+			"d": 127.3,
+			"h": 208.1
+		},
+		"mount": "floor",
+		"triangles": 4132,
+		"trianglesBefore": 168164,
+		"bytes": 51800
+	},
+	{
+		"id": "ikea-ps2014-lamp",
+		"file": "/models/ikea-ps2014-lamp.glb",
+		"size": {
+			"w": 36,
+			"d": 36,
+			"h": 85.5
+		},
+		"mount": "ceiling",
+		"triangles": 90947,
+		"trianglesBefore": 113450,
+		"bytes": 576752
+	}
+]
