@@ -173,8 +173,7 @@ function floorRects(g: Geometry) {
 export function insideRoom(f: Furniture, g: Geometry) {
 	const b = bbox(f);
 	return floorRects(g).some(
-		(r) =>
-			b.minX > r.x0 - 0.5 && b.maxX < r.x1 + 0.5 && b.minY > r.y0 - 0.5 && b.maxY < r.y1 + 0.5
+		(r) => b.minX > r.x0 - 0.5 && b.maxX < r.x1 + 0.5 && b.minY > r.y0 - 0.5 && b.maxY < r.y1 + 0.5
 	);
 }
 

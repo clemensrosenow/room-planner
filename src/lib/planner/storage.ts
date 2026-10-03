@@ -59,7 +59,10 @@ export function loadDraft(): Draft {
 			const d = JSON.parse(raw);
 			if (d.schema === 2) {
 				const remixedFrom = parseRemix(d.remixedFrom);
-				return { placements: parsePlacements(d.placements, true), ...(remixedFrom && { remixedFrom }) };
+				return {
+					placements: parsePlacements(d.placements, true),
+					...(remixedFrom && { remixedFrom })
+				};
 			}
 			return { placements: migrateV1(d.furn) };
 		}

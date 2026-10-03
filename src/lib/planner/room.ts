@@ -114,7 +114,8 @@ export function parsePlacements(src: unknown, fill = false): Placements | null {
 	for (const id of PIECE_IDS) {
 		const v = raw[id] as Record<string, unknown> | undefined;
 		const ok = v && [v.cx, v.cy, v.rot].every((n) => typeof n === 'number' && Number.isFinite(n));
-		if (ok) out[id] = { cx: v.cx as number, cy: v.cy as number, rot: normalizeAngle(v.rot as number) };
+		if (ok)
+			out[id] = { cx: v.cx as number, cy: v.cy as number, rot: normalizeAngle(v.rot as number) };
 		else if (fill) out[id] = { ...DEFAULT_PLACEMENTS[id] };
 		else return null;
 	}

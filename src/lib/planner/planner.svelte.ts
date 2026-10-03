@@ -1,4 +1,10 @@
-import { checkFurniture, keepInside, moveTo, normalizeAngle, type FurnitureCheck } from './furniture';
+import {
+	checkFurniture,
+	keepInside,
+	moveTo,
+	normalizeAngle,
+	type FurnitureCheck
+} from './furniture';
 import {
 	conflictIds,
 	defaultPlacements,
