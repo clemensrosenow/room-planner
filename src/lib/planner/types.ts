@@ -45,6 +45,8 @@ export interface Furniture {
 	color: number;
 	/** Type for icon and preview model; guessed from the name when missing */
 	kind?: Kind;
+	/** Real 3D model (id in MODELS); its size is fixed */
+	model?: string;
 }
 
 export interface PlannerData {

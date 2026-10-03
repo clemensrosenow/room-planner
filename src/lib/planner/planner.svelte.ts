@@ -1,7 +1,13 @@
 import { CATALOG, type Preset } from './catalog';
 import { DEFAULT_CFG } from './defaults';
 import { newId } from './format';
-import { checkFurniture, moveTo, normalizeAngle, type FurnitureCheck } from './furniture';
+import {
+	checkFurniture,
+	keepInside,
+	moveTo,
+	normalizeAngle,
+	type FurnitureCheck
+} from './furniture';
 import { computeGeometry } from './geometry';
 import { clone, loadData, saveData } from './storage';
 import type { Furniture } from './types';
@@ -111,8 +117,10 @@ class Planner {
 			cx: Math.round(at?.[0] ?? g.W / 2),
 			cy: Math.round(at?.[1] ?? (g.hasNotch ? (g.N + g.L) / 2 : g.L / 2)),
 			rot: 0,
-			color: preset.color
+			color: preset.color,
+			...(preset.model && { model: preset.model })
 		};
+		keepInside(f, g);
 		this.furn.push(f);
 		return this.furn[this.furn.length - 1];
 	}
@@ -125,6 +133,7 @@ class Planner {
 			cx: f.cx + 20,
 			cy: f.cy + 20
 		};
+		keepInside(copy, this.geo);
 		this.furn.push(copy);
 		return this.furn[this.furn.length - 1];
 	}
@@ -141,6 +150,12 @@ class Planner {
 
 	rotate(f: Furniture, deg: number) {
 		f.rot = normalizeAngle(f.rot + deg);
+		keepInside(f, this.geo);
+	}
+
+	/** Pushes every piece back inside the walls (after rotating, resizing or a room change). */
+	keepAllInside() {
+		for (const f of this.furn) keepInside(f, this.geo);
 	}
 
 	resetRoom() {

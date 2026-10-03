@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { loadModel, modelClone } from '../preview/modelLoader';
+import { modelInfo } from './catalog';
 import { PALETTE } from './defaults';
 import { cm, cssVar } from './format';
-import type { FurnitureCheck } from './furniture';
+import { elevation, type FurnitureCheck } from './furniture';
 import { buildWalls, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
@@ -38,6 +40,10 @@ export class RoomScene {
 	/** Swing area materials by door name, tinted when furniture blocks the door */
 	private sectors = new Map<string, THREE.MeshBasicMaterial>();
 	private selected: { id: string; h: number } | null = null;
+	/** Ceiling height, where ceiling lamps hang */
+	private ceilingH = 250;
+	/** Last furniture shown, rebuilt once a real model has loaded */
+	private last: Parameters<RoomScene['setFurniture']> | null = null;
 	private lastAnchor = '';
 	private glowTexture: THREE.Texture | null = null;
 
@@ -131,6 +137,7 @@ export class RoomScene {
 	setRoom(g: Geometry, lowWalls: boolean, dims = true) {
 		const grp = this.roomGroup;
 		disposeGroup(grp);
+		this.ceilingH = g.H;
 		const wallH = lowWalls ? Math.min(g.H, 110) : g.H;
 		const side = new THREE.MeshStandardMaterial({ color: color('--wall3d'), roughness: 0.92 });
 		const cap = new THREE.MeshStandardMaterial({ color: color('--wall'), roughness: 0.9 });
@@ -287,6 +294,8 @@ export class RoomScene {
 		this.sun.position.set(g.W * 0.2 - 300, 900, g.L + 600);
 		this.sun.target.position.set(g.W / 2, 0, g.L / 2);
 		this.scene.background = color('--scene');
+		// Ceiling lamps follow the ceiling height
+		if (this.last) this.setPositions(this.last[0]);
 	}
 
 	private gridTexture() {
@@ -337,11 +346,12 @@ export class RoomScene {
 	) {
 		disposeGroup(this.furnGroup);
 		this.pieces.clear();
+		this.last = [furn, checks, selectedId];
 		const accent = color('--accent');
 		const warn = color('--warn');
 		const ink = color('--wall');
 		const sel = furn.find((f) => f.id === selectedId);
-		this.selected = sel ? { id: sel.id, h: sel.h } : null;
+		this.selected = sel ? { id: sel.id, h: sel.h + this.baseY(sel, furn) } : null;
 		for (const f of furn) {
 			const isSel = selectedId === f.id;
 			const bad = checks[f.id]?.bad;
@@ -364,10 +374,25 @@ export class RoomScene {
 			edges.position.y = f.h / 2;
 			const piece = new THREE.Group();
 			piece.add(mesh, edges);
+			// Real model: shown instead of the box, which stays as an invisible hit area
+			const info = modelInfo(f);
+			if (info) {
+				const model = modelClone(f.model!);
+				if (model) {
+					model.position.y = info.mount === 'ceiling' ? f.h : 0;
+					piece.add(model);
+					mat.colorWrite = mat.depthWrite = false;
+					mesh.castShadow = mesh.receiveShadow = false;
+					edges.visible = isSel || !!bad;
+				} else {
+					loadModel(f.model!).then((ok) => ok && this.last && this.setFurniture(...this.last));
+				}
+			}
 			// Name only on the selected piece, the room stays calm
 			if (isSel) {
 				const label = labelSprite(f.name || 'Box', 14, true);
 				label.position.y = f.h + 16;
+				if (modelInfo(f)?.mount === 'ceiling') label.position.y = -16;
 				piece.add(label);
 			}
 			// Soft red glow on the floor around pieces with a problem
@@ -383,7 +408,7 @@ export class RoomScene {
 					})
 				);
 				glow.rotation.x = -Math.PI / 2;
-				glow.position.y = 0.8;
+				glow.position.y = 0.8 - this.baseY(f, furn);
 				glow.raycast = () => {};
 				piece.add(glow);
 			}
@@ -458,13 +483,20 @@ export class RoomScene {
 		this.events.onAnchor?.(p);
 	}
 
+	/** Height of the piece's bottom: on the floor, on another piece, or hanging from the ceiling. */
+	private baseY(f: Furniture, furn: Furniture[]) {
+		return modelInfo(f)?.mount === 'ceiling' ? this.ceilingH - f.h : elevation(f, furn);
+	}
+
 	/** Cheap update for moves and rotations. */
 	setPositions(furn: Furniture[]) {
 		for (const f of furn) {
 			const piece = this.pieces.get(f.id);
 			if (!piece) continue;
-			piece.position.set(f.cx, 0, f.cy);
+			const y = this.baseY(f, furn);
+			piece.position.set(f.cx, y, f.cy);
 			piece.rotation.y = (-f.rot * Math.PI) / 180;
+			if (this.selected?.id === f.id) this.selected.h = f.h + y;
 		}
 	}
 
@@ -588,6 +620,8 @@ function labelSprite(text: string, size: number, strong: boolean) {
 function disposeGroup(group: THREE.Group) {
 	group.traverse((o) => {
 		const obj = o as THREE.Mesh;
+		// Real models share geometry and materials with the loader's cache
+		if (obj.userData.shared) return;
 		obj.geometry?.dispose();
 		const mats = Array.isArray(obj.material) ? obj.material : obj.material ? [obj.material] : [];
 		for (const m of mats) {

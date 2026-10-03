@@ -64,7 +64,15 @@
 	// Full rebuild only when something other than the position changes
 	$effect(() => {
 		void styleVersion;
-		void planner.furn.map((f) => [f.w, f.d, f.h, f.name, f.color, planner.checks[f.id]?.bad]);
+		void planner.furn.map((f) => [
+			f.w,
+			f.d,
+			f.h,
+			f.name,
+			f.color,
+			f.model,
+			planner.checks[f.id]?.bad
+		]);
 		void planner.selectedId;
 		const s = scene;
 		untrack(() => s?.setFurniture(planner.furn, planner.checks, planner.selectedId));

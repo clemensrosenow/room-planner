@@ -11,7 +11,6 @@
 	import HelpButton from '#lib/components/ui/HelpButton.svelte';
 	import IconButton from '#lib/components/ui/IconButton.svelte';
 	import Segmented from '#lib/components/ui/Segmented.svelte';
-	import { normalizeAngle } from '#lib/planner/furniture.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { selectItem, setParams } from '#lib/url.ts';
 	import { duration } from '#lib/motion.ts';
@@ -75,8 +74,7 @@
 		else if (e.key === 'ArrowRight') f.cx += step;
 		else if (e.key === 'ArrowUp') f.cy -= step;
 		else if (e.key === 'ArrowDown') f.cy += step;
-		else if (e.key === 'r' || e.key === 'R')
-			f.rot = normalizeAngle(f.rot + (e.shiftKey ? -90 : 90));
+		else if (e.key === 'r' || e.key === 'R') planner.rotate(f, e.shiftKey ? -90 : 90);
 		else if (e.key === 'Delete' || e.key === 'Backspace') planner.remove(f);
 		else if (e.key === 'Escape') {
 			if (details) closeDetails();

@@ -9,8 +9,12 @@
 
 	let { children } = $props();
 
-	// Auto-save every change
-	$effect(() => planner.save());
+	// Every change keeps the furniture within the walls (arrow keys, rotating, resizing,
+	// a smaller room) and is saved
+	$effect(() => {
+		planner.keepAllInside();
+		planner.save();
+	});
 
 	// Reopen the last step (with its view settings, but no selection) next time
 	afterNavigate(({ to }) => {

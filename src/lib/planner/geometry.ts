@@ -200,15 +200,6 @@ function makeDoor(
 	};
 }
 
-export function inRoom(g: Geometry, x: number, y: number, eps = 0.5) {
-	const { W, L, NW, N, hasNotch } = g;
-	if (!hasNotch) return x >= -eps && x <= W + eps && y >= -eps && y <= L + eps;
-	return (
-		(x >= -eps && x <= W + eps && y >= N - eps && y <= L + eps) ||
-		(x >= NW - eps && x <= W + eps && y >= -eps && y <= N + eps)
-	);
-}
-
 export interface WallEdge {
 	S: Point;
 	E: Point;

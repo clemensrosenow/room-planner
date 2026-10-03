@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { furnitureKind } from '../planner/catalog';
+import { furnitureKind, modelInfo } from '../planner/catalog';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
 
@@ -61,18 +61,21 @@ export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 
 	switch (furnitureKind(f)) {
 		case 'bed': {
-			const legH = Math.min(8, h * 0.2);
-			const mattressH = Math.min(22, h * 0.45);
-			const frameTop = h - mattressH;
-			const head = 6;
+			// Boxspring: upholstered base up to 30 cm, mattress on top, cushioned headboard
+			const head = Math.min(10, d * 0.1);
 			const inner = d - head;
-			legs(kit.oak(), 5, legH, 4);
-			add(kit.oak(), [w, frameTop - legH, inner], [0, legH, head / 2], 1);
-			add(kit.linen(), [w - 3, mattressH, inner - 3], [0, frameTop, head / 2], 5);
+			const z = head / 2;
+			const feet = 3;
+			const baseTop = Math.min(30, h * 0.6);
+			for (const sx of [-1, 1])
+				for (const sz of [-1, 1])
+					add(kit.oak(), [4, feet, 4], [sx * (w / 2 - 6), 0, z + sz * (inner / 2 - 6)]);
+			add(kit.fabric(f.color), [w, baseTop - feet, inner], [0, feet, z], 2);
+			add(kit.linen(), [w - 1, h - baseTop, inner - 1], [0, baseTop, z], 5);
 			// Duvet over the lower two thirds, folded over the foot end
 			const duvet = inner * 0.66;
-			add(kit.fabric(f.color), [w + 1, 6, duvet], [0, h - 2.5, d / 2 - duvet / 2 - 1], 3);
-			add(kit.fabric(f.color), [w + 1, mattressH - 3, 3], [0, frameTop + 2, d / 2 - 1.5], 1.4);
+			add(kit.fabric(f.color), [w + 1, 5, duvet], [0, h - 1.5, d / 2 - duvet / 2 - 1], 2.5);
+			add(kit.fabric(f.color), [w + 1, h - baseTop - 2, 3], [0, baseTop + 1, d / 2 - 1], 1.4);
 			// Pillows at the head end
 			const n = w >= 120 ? 2 : 1;
 			const pw = Math.min(62, (w - 12) / n - 4);
@@ -80,15 +83,31 @@ export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 				const x = (i - (n - 1) / 2) * (pw + 4);
 				add(kit.linen(), [pw, 12, 40], [x, h - 3, -d / 2 + head + 23], 5.5);
 			}
-			// Upholstered headboard
-			add(kit.fabric(f.color), [w, h + 45 - legH, head], [0, legH, -d / 2 + head / 2], 2.5);
+			add(kit.fabric(f.color), [w, Math.max(h, 103), head], [0, 0, -d / 2 + head / 2], 3);
 			break;
 		}
 		case 'desk': {
-			add(kit.oak(), [w, 3, d], [0, h - 3, 0], 0.6);
-			legs(kit.lacquer(f.color), 4, h - 3, 4);
-			// Rail under the top keeps the legs from looking stuck on
-			add(kit.lacquer(f.color), [w - 8, 6, 2], [0, h - 9, -d / 2 + 4]);
+			// Top on two flat side boards; drawer unit with three drawers on the right
+			const top = 2.5;
+			const board = 2;
+			const bd = Math.min(40, d);
+			const legH = h - top;
+			add(kit.oak(), [w, top, d], [0, legH, 0], 0.6);
+			const frame = kit.lacquer(f.color);
+			for (const sx of [-1, 1]) add(frame, [board, legH, bd], [sx * (w / 2 - board / 2), 0, 0]);
+			const uw = Math.min(40, w / 2);
+			const ux = w / 2 - board - uw / 2;
+			add(frame, [board, legH, bd], [w / 2 - board - uw - board / 2, 0, 0]);
+			// Drawers from 6 cm above the floor to 13 cm below the top
+			const bottom = Math.min(6, legH * 0.1);
+			const ceil = Math.max(bottom + 3, h - 13);
+			add(kit.gap(), [uw, ceil - bottom, bd - 2], [ux, bottom, -1]);
+			const dh = (ceil - bottom) / 3;
+			for (let i = 0; i < 3; i++) {
+				const y = bottom + i * dh;
+				add(frame, [uw - 0.6, dh - 0.6, 1.6], [ux, y + 0.3, bd / 2 - 0.8], 0.3);
+				add(kit.steel(), [10, 1.2, 1.6], [ux, y + dh - 4, bd / 2 + 0.8], 0.5);
+			}
 			break;
 		}
 		case 'chair': {
@@ -112,42 +131,6 @@ export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 			for (let i = 0; i < n; i++) {
 				const edge = i % 2 === 0 ? -w / 2 + (i + 1) * dw - 4 : -w / 2 + i * dw + 4;
 				add(kit.steel(), [1.2, 30, 2.4], [edge, plinth + (h - plinth) * 0.45, d / 2 + 1.2], 0.5);
-			}
-			break;
-		}
-		case 'sofa': {
-			const legH = 10;
-			const seatH = Math.min(44, h * 0.52);
-			const arm = Math.min(18, w * 0.12);
-			const back = Math.min(22, d * 0.26);
-			const cushion = 12;
-			const iw = w - 2 * arm;
-			legs(kit.oak(), 4, legH, 6);
-			add(kit.fabric(f.color), [w, seatH - cushion - legH, d], [0, legH, 0], 3);
-			add(kit.fabric(f.color), [w, h - legH, back * 0.55], [0, legH, -d / 2 + back * 0.275], 3);
-			for (const sx of [-1, 1])
-				add(
-					kit.fabric(f.color),
-					[arm, Math.min(h, seatH + 18) - legH, d],
-					[sx * (w / 2 - arm / 2), legH, 0],
-					4
-				);
-			const n = iw > 150 ? 3 : iw > 60 ? 2 : 1;
-			const cw = iw / n - 1;
-			for (let i = 0; i < n; i++) {
-				const x = -iw / 2 + (i + 0.5) * (iw / n);
-				add(
-					kit.fabric(f.color),
-					[cw, cushion, d - back * 0.55],
-					[x, seatH - cushion, back * 0.275],
-					5
-				);
-				add(
-					kit.fabric(f.color),
-					[cw, h - seatH - 3, back * 0.6],
-					[x, seatH, -d / 2 + back * 0.55 + back * 0.3],
-					6
-				);
 			}
 			break;
 		}
@@ -187,6 +170,21 @@ export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 			const drawer = h - (h - legH) * 0.42;
 			add(kit.gap(), [w - 3, 0.5, 0.4], [0, drawer, d / 2]);
 			add(kit.steel(), [6, 1.4, 1.6], [0, (h + drawer) / 2, d / 2 + 0.8], 0.6);
+			break;
+		}
+		case 'lamp': {
+			// Stand-in until the real model has loaded: base, pole and shade
+			const shade = Math.min(w, d, 40);
+			const shadeH = Math.min(25, h * 0.35);
+			if (modelInfo(f)?.mount === 'ceiling') {
+				// Hangs from its origin at the ceiling
+				add(kit.steel(), [1, h - shadeH, 1], [0, -h + shadeH, 0]);
+				add(kit.linen(), [shade, shadeH, shade], [0, -h, 0], shade / 2);
+				break;
+			}
+			add(kit.steel(), [shade * 0.6, 2, shade * 0.6], [0, 0, 0], 1);
+			add(kit.steel(), [1.5, h - shadeH - 2, 1.5], [0, 2, 0]);
+			add(kit.linen(), [shade, shadeH, shade], [0, h - shadeH, 0], 3);
 			break;
 		}
 		default:

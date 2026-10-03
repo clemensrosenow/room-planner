@@ -9,9 +9,12 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
+import { furnitureKind, modelInfo } from '../planner/catalog';
+import { elevation } from '../planner/furniture';
 import { buildWalls, type Geometry } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
+import { loadModel, modelClone } from './modelLoader';
 import { buildFurniture, MaterialKit } from './models';
 import type { Shot } from './shots';
 import { dayOfYear, sunDirection, sunLight } from './sun';
@@ -119,8 +122,16 @@ export class PreviewScene {
 		emissive: 0xffd9a8,
 		emissiveIntensity: 0
 	});
-	private ceiling: THREE.Object3D | null = null;
+	/** Ceilings of room and loggia, and what hangs from them: hidden when looking from above */
+	private roof: THREE.Object3D[] = [];
+	/** Built-in ceiling light, used while no lamp is placed */
 	private shade: THREE.Object3D | null = null;
+	/** Lights of the placed lamps (in meters, outside `root`) */
+	private lampLights: THREE.PointLight[] = [];
+	/** Glowing parts of the placed lamp models */
+	private lampGlow: THREE.MeshStandardMaterial[] = [];
+	/** Last room built, rebuilt once a real model has loaded */
+	private last: { g: Geometry; furn: Furniture[] } | null = null;
 	private geo: Geometry | null = null;
 	private hours = 9;
 	private resizeObserver: ResizeObserver;
@@ -249,7 +260,9 @@ export class PreviewScene {
 			this.lastTime = now;
 			if (!this.el.offsetParent) return;
 			this.update(dt);
-			this.sky.material.uniforms.time.value += dt * 1000;
+			// Seconds: the cloud speed is tuned for them. Milliseconds made the clouds race
+			// across the sky and flicker
+			this.sky.material.uniforms.time.value += dt;
 			if (this.envDirty && now - this.envUpdated > 250) this.updateEnvironment(now);
 			this.composer.render();
 		};
@@ -261,6 +274,7 @@ export class PreviewScene {
 		this.resizeObserver.disconnect();
 		this.controls.dispose();
 		this.walk.dispose();
+		this.clearLamps();
 		disposeTree(this.scene);
 		disposeTree(this.envScene);
 		this.envTarget?.dispose();
@@ -306,6 +320,8 @@ export class PreviewScene {
 
 	build(g: Geometry, furn: Furniture[]) {
 		this.geo = g;
+		this.last = { g, furn };
+		this.clearLamps();
 		disposeTree(this.root);
 		const grp = this.root;
 		const wallMat = mat.plaster();
@@ -329,7 +345,7 @@ export class PreviewScene {
 			0,
 			new THREE.MeshStandardMaterial({ color: 0xf7f6f3, roughness: 0.95 })
 		);
-		this.ceiling = ceiling;
+		this.roof = [ceiling];
 
 		// Walls with openings, skirting boards along every wall that reaches the floor
 		const trim = mat.trim();
@@ -401,26 +417,74 @@ export class PreviewScene {
 			box(grp, [g.W / 2, ph / 2, ly0 + g.D + 7.5], [g.W + 2 * g.tI, ph, 15], 0, wallMat);
 			box(grp, [-g.tI / 2, g.H / 2, ly0 + g.D / 2], [g.tI, g.H, g.D], 0, wallMat);
 			box(grp, [g.W + g.tI / 2, g.H / 2, ly0 + g.D / 2], [g.tI, g.H, g.D], 0, wallMat);
-			box(grp, [g.W / 2, g.H + 10, ly0 + g.D / 2], [g.W + 2 * g.tI, 20, g.D], 0, wallMat);
+			this.roof.push(
+				box(grp, [g.W / 2, g.H + 10, ly0 + g.D / 2], [g.W + 2 * g.tI, 20, g.D], 0, wallMat)
+			);
 		}
 
-		// Furniture models picked by name (bed, sofa, desk, ...)
+		// Furniture: real models where linked (parametric stand-ins while they load), else
+		// parametric models picked by type
 		const kit = new MaterialKit();
+		const lamps: { pos: THREE.Vector3; intensity: number; ceiling: boolean }[] = [];
 		for (const f of furn) {
-			const piece = buildFurniture(f, kit);
-			piece.position.set(f.cx, 0, f.cy);
+			const info = modelInfo(f);
+			const ceiling = info?.mount === 'ceiling';
+			const model = info && modelClone(f.model!);
+			if (info && !model)
+				loadModel(f.model!).then((ok) => {
+					if (ok && this.last?.furn === furn) this.build(this.last.g, furn);
+				});
+			const piece = model ?? buildFurniture(f, kit);
+			piece.position.set(f.cx, ceiling ? g.H : elevation(f, furn), f.cy);
 			piece.rotation.y = (-f.rot * Math.PI) / 180;
 			grp.add(piece);
+			if (ceiling) this.roof.push(piece);
+			if (model && info.light?.glow) this.glowParts(model, info.light.glow);
+
+			if (furnitureKind(f) !== 'lamp') continue;
+			// The light sits inside the shade, which must not block it
+			piece.traverse((o) => (o.castShadow = false));
+			piece.updateWorldMatrix(true, true);
+			// Bulb: from the model, else just under the top of the stand-in's shade
+			const local = info?.light
+				? new THREE.Vector3(...info.light.pos)
+				: new THREE.Vector3(0, ceiling ? -f.h + 10 : f.h - 10, 0);
+			const bulb = piece.localToWorld(local.divideScalar(model ? 100 : 1));
+			const sphere = new THREE.Mesh(new THREE.SphereGeometry(2.5, 16, 12), this.lampShade);
+			sphere.position.copy(grp.worldToLocal(bulb.clone()));
+			grp.add(sphere);
+			if (ceiling) this.roof.push(sphere);
+			lamps.push({ pos: bulb, intensity: info?.light?.intensity ?? 8, ceiling });
 		}
 
-		// Flush ceiling light in the center of the main room part
+		// One light per lamp; only one casts shadows (the brightest), which keeps it fast
+		lamps.sort((a, b) => b.intensity - a.intensity);
+		for (const [i, l] of lamps.entries()) {
+			const light = new THREE.PointLight(0xffd6a6, 0, 0, 2);
+			light.position.copy(l.pos);
+			light.userData.intensity = l.intensity;
+			if (i === 0) {
+				light.castShadow = true;
+				light.shadow.mapSize.set(1024, 1024);
+				light.shadow.radius = 4;
+				light.shadow.bias = -0.006;
+				light.shadow.normalBias = 0.03;
+			}
+			this.scene.add(light);
+			this.lampLights.push(light);
+		}
+
+		// Without placed lamps: flush ceiling light in the center of the main room part
 		const lx = g.W / 2;
 		const lz = g.hasNotch ? (g.N + g.L) / 2 : g.L / 2;
 		const shade = new THREE.Mesh(new THREE.CylinderGeometry(20, 22, 7, 48), this.lampShade);
 		shade.position.set(lx, g.H - 3.5, lz);
 		grp.add(shade);
 		this.shade = shade;
+		this.shade.visible = lamps.length === 0;
+		this.roof.push(shade);
 		this.lamp.position.set(lx / 100, (g.H - 20) / 100, lz / 100);
+		this.setLamp(this.lampOn);
 
 		// Daylight panel just inside the glass, shining into the room
 		const wx = (fr.gx0 + fr.gx1) / 200;
@@ -491,11 +555,40 @@ export class PreviewScene {
 		old?.dispose();
 	}
 
+	/** Switches all lights: the placed lamps, or the built-in ceiling light without any. */
 	setLamp(on: boolean) {
 		this.lampOn = on;
-		this.lamp.intensity = on ? 18 : 0;
+		const builtIn = this.lampLights.length === 0;
+		this.lamp.intensity = on && builtIn ? 18 : 0;
+		this.lamp.castShadow = builtIn;
+		for (const l of this.lampLights) l.intensity = on ? l.userData.intensity : 0;
 		this.lampShade.emissiveIntensity = on ? 2.5 : 0;
+		for (const m of this.lampGlow) m.emissiveIntensity = on ? 1.2 : 0;
 		this.updateBounce();
+	}
+
+	/** Gives the model's parts with the named material their own copy that can glow. */
+	private glowParts(model: THREE.Object3D, material: string) {
+		model.traverse((o) => {
+			const mesh = o as THREE.Mesh;
+			const m = mesh.material as THREE.MeshStandardMaterial | undefined;
+			if (!m || Array.isArray(m) || m.name !== material) return;
+			const glow = m.clone();
+			glow.emissive = new THREE.Color(0xffd9a8);
+			glow.emissiveIntensity = 0;
+			mesh.material = glow;
+			this.lampGlow.push(glow);
+		});
+	}
+
+	private clearLamps() {
+		for (const l of this.lampLights) {
+			l.removeFromParent();
+			l.dispose();
+		}
+		for (const m of this.lampGlow) m.dispose();
+		this.lampLights = [];
+		this.lampGlow = [];
 	}
 
 	/** Floor bounce and exposure follow daylight and the lamp. */
@@ -633,9 +726,12 @@ export class PreviewScene {
 			this.controls.update();
 		}
 		this.updateFov(dt);
-		// Look into the room from above
-		if (this.ceiling && this.shade && this.geo)
-			this.ceiling.visible = this.shade.visible = this.camera.position.y < this.geo.H / 100 + 0.02;
+		// Look into the room (and the loggia) from above
+		if (this.geo) {
+			const inside = this.camera.position.y < this.geo.H / 100 + 0.02;
+			for (const o of this.roof)
+				o.visible = inside && (o !== this.shade || !this.lampLights.length);
+		}
 	}
 
 	/** Slow push-in while panning across the view, then glide to the next shot. */
@@ -699,6 +795,8 @@ function disposeTree(obj: THREE.Object3D) {
 	obj.traverse((o) => {
 		const mesh = o as THREE.Mesh;
 		if (o === obj && obj.type === 'Scene') return;
+		// Real models share geometry and materials with the loader's cache
+		if (o.userData.shared) return;
 		mesh.geometry?.dispose();
 		const mats = Array.isArray(mesh.material)
 			? mesh.material

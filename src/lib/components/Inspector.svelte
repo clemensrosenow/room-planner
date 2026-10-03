@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { KINDS, furnitureKind, type Kind } from '#lib/planner/catalog.ts';
+	import { KINDS, furnitureKind, modelInfo, type Kind } from '#lib/planner/catalog.ts';
 	import { PALETTE } from '#lib/planner/defaults.ts';
 	import {
 		bbox,
@@ -17,6 +17,8 @@
 	let { f }: { f: Furniture } = $props();
 
 	const box = $derived(bbox(f));
+	const model = $derived(modelInfo(f));
+	const geo = $derived(planner.geo);
 	const problems = $derived(describeCheck(planner.checks[f.id]));
 </script>
 
@@ -28,12 +30,19 @@
 		<select
 			class="input"
 			value={furnitureKind(f)}
-			onchange={(e) => (f.kind = e.currentTarget.value as Kind)}
+			onchange={(e) => {
+				f.kind = e.currentTarget.value as Kind;
+				// Another type no longer looks like the real model
+				delete f.model;
+			}}
 		>
 			{#each KINDS as k (k.kind)}
 				<option value={k.kind}>{k.label}</option>
 			{/each}
 		</select>
+		{#if model}
+			<span class="text-xs text-muted">Real 3D model: {model.label}</span>
+		{/if}
 	</label>
 
 	<div class="flex gap-2" role="group" aria-label="Color">
@@ -53,18 +62,28 @@
 
 	<section class="grid gap-2" aria-label="Size">
 		<h3 class="text-xs font-semibold tracking-wide text-muted uppercase">Size</h3>
-		<div class="grid grid-cols-3 gap-2">
-			<ScrubValue label="Width" value={f.w} min={1} onchange={(v) => setSize(f, 'w', v)} />
-			<ScrubValue label="Depth" value={f.d} min={1} onchange={(v) => setSize(f, 'd', v)} />
-			<ScrubValue label="Height" value={f.h} min={1} onchange={(v) => setSize(f, 'h', v)} />
-		</div>
+		{#if model}
+			<p class="text-[13px] tabular-nums">
+				{f.w} × {f.d} × {f.h} cm <span class="text-muted">· size from model</span>
+			</p>
+		{:else}
+			<div class="grid grid-cols-3 gap-2">
+				<ScrubValue label="Width" value={f.w} min={1} onchange={(v) => setSize(f, 'w', v, geo)} />
+				<ScrubValue label="Depth" value={f.d} min={1} onchange={(v) => setSize(f, 'd', v, geo)} />
+				<ScrubValue label="Height" value={f.h} min={1} onchange={(v) => setSize(f, 'h', v, geo)} />
+			</div>
+		{/if}
 	</section>
 
 	<section class="grid gap-2" aria-label="Position">
 		<h3 class="text-xs font-semibold tracking-wide text-muted uppercase">Position</h3>
 		<div class="grid grid-cols-3 gap-2">
-			<ScrubValue label="From left" value={box.minX} onchange={(v) => setPosition(f, 'x', v)} />
-			<ScrubValue label="From top" value={box.minY} onchange={(v) => setPosition(f, 'y', v)} />
+			<ScrubValue
+				label="From left"
+				value={box.minX}
+				onchange={(v) => setPosition(f, 'x', v, geo)}
+			/>
+			<ScrubValue label="From top" value={box.minY} onchange={(v) => setPosition(f, 'y', v, geo)} />
 			<ScrubValue
 				label="Rotation"
 				unit="°"
