@@ -19,7 +19,7 @@
 		return Math.min(21.5, Math.max(5, Number(m[1]) + Number(m[2]) / 60));
 	}
 
-	// The URL (?shot=, ?time=18h30, ?lamp=1, ?mode=tour|walk) sets the starting state
+	// The URL (?shot=, ?time=18h30, ?lamp=1, ?mode=tour) sets the starting state
 	const params = page.url.searchParams;
 	const startMode = params.get('mode');
 
@@ -28,7 +28,7 @@
 	let scene = $state<PreviewScene | null>(null);
 	let failed = $state(false);
 
-	let mode = $state<CameraMode>('orbit');
+	let mode = $state<CameraMode>('walk');
 	let activeShot = $state(params.get('shot') ?? 'door');
 	let hours = $state(parseTime(params.get('time')));
 	let lamp = $state(params.get('lamp') === '1');
@@ -47,6 +47,8 @@
 			return;
 		}
 		scene.onModeChange = (m) => (mode = m);
+		// Walking away from a viewpoint unselects it
+		scene.onManual = () => (activeShot = '');
 		return () => scene?.dispose();
 	});
 
@@ -64,7 +66,6 @@
 			s.goTo(start, true);
 			activeShot = start.id;
 			if (startMode === 'tour') toggleTour();
-			else if (startMode === 'walk') toggleWalk();
 		});
 	});
 	$effect(() => scene?.setTime(hours));
@@ -73,10 +74,10 @@
 	// Mirror the state into the URL (debounced, the slider changes it quickly)
 	$effect(() => {
 		const next = {
-			shot: activeShot !== 'door' ? activeShot : null,
+			shot: activeShot && activeShot !== 'door' ? activeShot : null,
 			time: hours !== DEFAULT_TIME ? formatTime(hours).replace(':', 'h') : null,
 			lamp: lamp ? 1 : null,
-			mode: mode !== 'orbit' ? mode : null
+			mode: mode === 'tour' ? mode : null
 		};
 		const timer = setTimeout(() => setParams(next, { replace: true }), 300);
 		return () => clearTimeout(timer);
@@ -87,30 +88,18 @@
 		if (!shot || !scene) return;
 		scene.goTo(shot);
 		activeShot = id;
-		mode = 'orbit';
+		mode = shot.cutaway ? 'overview' : 'walk';
 	}
 
 	function toggleTour() {
 		if (!scene) return;
 		if (mode === 'tour') {
-			scene.setMode('orbit');
-			mode = 'orbit';
+			scene.setMode('walk');
+			mode = 'walk';
 		} else {
 			scene.startTour(shots.filter((s) => !s.cutaway));
 			mode = 'tour';
 			activeShot = '';
-		}
-	}
-
-	function toggleWalk() {
-		if (!scene) return;
-		if (mode === 'walk') {
-			scene.setMode('orbit');
-			mode = 'orbit';
-		} else {
-			scene.setMode('walk');
-			scene.walkFrom(shots.find((s) => s.id === activeShot && !s.cutaway) ?? shots[0]);
-			mode = 'walk';
 		}
 	}
 
@@ -130,11 +119,11 @@
 	$effect(() => () => clearTimeout(idleTimer));
 	const hideUi = $derived(mode === 'tour' && idle);
 
-	const pad: [string, string, string][] = [
-		['arrowup', 'chevron-up', 'col-start-2'],
-		['arrowleft', 'chevron-left', 'col-start-1 row-start-2'],
-		['arrowdown', 'chevron-down', 'col-start-2 row-start-2'],
-		['arrowright', 'chevron-right', 'col-start-3 row-start-2']
+	const pad: [string, string, string, string][] = [
+		['arrowup', 'chevron-up', 'col-start-2', 'Walk forward'],
+		['arrowleft', 'chevron-left', 'col-start-1 row-start-2', 'Turn left'],
+		['arrowdown', 'chevron-down', 'col-start-2 row-start-2', 'Walk back'],
+		['arrowright', 'chevron-right', 'col-start-3 row-start-2', 'Turn right']
 	];
 
 	const chip = (active: boolean) => [
@@ -160,13 +149,13 @@
 			<p
 				class="pointer-events-none absolute inset-x-0 top-20 mx-auto w-fit rounded-full bg-sheet/85 px-4 py-1.5 text-[13px] text-muted shadow-float backdrop-blur-md"
 			>
-				Drag to look around · WASD or arrow keys to walk
+				Drag to look around · ↑↓ to walk · ←→ to turn · scroll to zoom
 			</p>
 			<div class="absolute right-4 bottom-36 z-10 grid grid-cols-3 gap-1.5 md:bottom-20">
-				{#each pad as [key, icon, pos] (key)}
+				{#each pad as [key, icon, pos, label] (key)}
 					<button
 						class="{pos} grid size-11 cursor-pointer place-items-center rounded-full bg-sheet/85 text-ink shadow-float backdrop-blur-md select-none active:bg-accent-soft"
-						aria-label="Walk {key.replace('arrow', '')}"
+						aria-label={label}
 						onpointerdown={() => scene?.press(key, true)}
 						onpointerup={() => scene?.press(key, false)}
 						onpointerleave={() => scene?.press(key, false)}
@@ -217,8 +206,8 @@
 							<span class="flex-none px-1.5 text-xs text-muted">Corners</span>
 						{/if}
 						<button
-							class={chip(activeShot === shot.id && mode === 'orbit')}
-							aria-pressed={activeShot === shot.id && mode === 'orbit'}
+							class={chip(activeShot === shot.id && mode !== 'tour')}
+							aria-pressed={activeShot === shot.id && mode !== 'tour'}
 							aria-label={shot.label}
 							onclick={() => goTo(shot.id)}
 						>
@@ -232,12 +221,6 @@
 					label={mode === 'tour' ? 'Stop tour' : 'Camera tour'}
 					pressed={mode === 'tour'}
 					onclick={toggleTour}
-				/>
-				<IconButton
-					icon="walk"
-					label={mode === 'walk' ? 'Stop walking' : 'Walk around'}
-					pressed={mode === 'walk'}
-					onclick={toggleWalk}
 				/>
 				<IconButton icon="maximize" label="Fullscreen" onclick={fullscreen} />
 			</FloatingBar>
