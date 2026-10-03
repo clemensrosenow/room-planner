@@ -7,6 +7,8 @@ export interface FurnitureCheck {
 	doors: string[];
 	/** Names of overlapping pieces */
 	overlap: string[];
+	/** Sticks out of the room */
+	outside: boolean;
 	bad: boolean;
 }
 
@@ -104,7 +106,8 @@ function overlaps(a: Furniture, b: Furniture) {
  * standing on another doesn't overlap it.
  */
 export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): FurnitureCheck {
-	if (modelInfo(f)?.mount === 'ceiling') return { doors: [], overlap: [], bad: false };
+	const outside = !insideRoom(f, g);
+	if (modelInfo(f)?.mount === 'ceiling') return { doors: [], overlap: [], outside, bad: outside };
 	const pts = samplePoints(f, 5);
 	const support = supportOf(f, all);
 	const doors = g.doors
@@ -131,28 +134,22 @@ export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): Fur
 				overlaps(f, o)
 		)
 		.map((o) => o.name || 'Box');
-	return { doors, overlap, bad: doors.length > 0 || overlap.length > 0 };
+	return { doors, overlap, outside, bad: outside || doors.length > 0 || overlap.length > 0 };
 }
 
 /** Problems in plain words, e.g. ["Blocks the room door", "Overlaps Desk"]. */
 export function describeCheck(c: FurnitureCheck | undefined): string[] {
 	if (!c) return [];
-	return [...c.doors.map((d) => `Blocks the ${d}`), ...c.overlap.map((n) => `Overlaps ${n}`)];
+	return [
+		...(c.outside ? ['Sticks out of the room'] : []),
+		...c.doors.map((d) => `Blocks the ${d}`),
+		...c.overlap.map((n) => `Overlaps ${n}`)
+	];
 }
 
 /* ---------- Edits (mutate the piece in place) ---------- */
 
 export const normalizeAngle = (deg: number) => ((deg % 360) + 360) % 360;
-
-/** Changes width/depth/height while keeping the left and top edge in place. */
-export function setSize(f: Furniture, key: 'w' | 'd' | 'h', value: number, g: Geometry) {
-	const before = bbox(f);
-	f[key] = Math.max(1, value);
-	const after = bbox(f);
-	f.cx += before.minX - after.minX;
-	f.cy += before.minY - after.minY;
-	keepInside(f, g);
-}
 
 /** Moves the piece so its bounding box starts at x / y. */
 export function setPosition(f: Furniture, axis: 'x' | 'y', value: number, g: Geometry) {
@@ -163,20 +160,35 @@ export function setPosition(f: Furniture, axis: 'x' | 'y', value: number, g: Geo
 }
 
 /**
- * Shifts the piece the shortest way so its bounding box lies within the walls. The floor is
- * one or two rectangles (main part and the strip beside the hallway corner), and a box inside
- * the floor always lies within one of them. A piece too big for the room is centered in it.
- * Returns whether the piece moved.
+ * The floor as one or two rectangles (main part and the strip beside the hallway corner). A
+ * box inside the floor always lies within one of them.
+ */
+function floorRects(g: Geometry) {
+	const rects = [{ x0: 0, y0: g.hasNotch ? g.N : 0, x1: g.W, y1: g.L }];
+	if (g.hasNotch) rects.push({ x0: g.NW, y0: 0, x1: g.W, y1: g.L });
+	return rects;
+}
+
+/** Whether the piece's bounding box lies within the walls (0.5 cm tolerance). */
+export function insideRoom(f: Furniture, g: Geometry) {
+	const b = bbox(f);
+	return floorRects(g).some(
+		(r) =>
+			b.minX > r.x0 - 0.5 && b.maxX < r.x1 + 0.5 && b.minY > r.y0 - 0.5 && b.maxY < r.y1 + 0.5
+	);
+}
+
+/**
+ * Shifts the piece the shortest way so its bounding box lies within the walls. A piece too big
+ * for the room is centered in it. Returns whether the piece moved.
  */
 export function keepInside(f: Furniture, g: Geometry): boolean {
 	const b = bbox(f);
-	const rects = [{ x0: 0, y0: g.hasNotch ? g.N : 0, x1: g.W, y1: g.L }];
-	if (g.hasNotch) rects.push({ x0: g.NW, y0: 0, x1: g.W, y1: g.L });
 	/** Shift along one axis that moves [lo, hi] into [r0, r1], centered if it doesn't fit */
 	const shift = (lo: number, hi: number, r0: number, r1: number) =>
 		hi - lo > r1 - r0 ? (r0 + r1 - lo - hi) / 2 : Math.max(0, r0 - lo) + Math.min(0, r1 - hi);
 	let best: { dx: number; dy: number } | null = null;
-	for (const r of rects) {
+	for (const r of floorRects(g)) {
 		const dx = shift(b.minX, b.maxX, r.x0, r.x1);
 		const dy = shift(b.minY, b.maxY, r.y0, r.y1);
 		if (!best || Math.hypot(dx, dy) < Math.hypot(best.dx, best.dy)) best = { dx, dy };

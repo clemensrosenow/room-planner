@@ -1,57 +1,69 @@
-import { CATALOG, type Preset } from './catalog';
-import { DEFAULT_CFG } from './defaults';
-import { newId } from './format';
+import { checkFurniture, keepInside, moveTo, normalizeAngle, type FurnitureCheck } from './furniture';
 import {
-	checkFurniture,
-	keepInside,
-	moveTo,
-	normalizeAngle,
-	type FurnitureCheck
-} from './furniture';
-import { computeGeometry } from './geometry';
-import { clone, loadData, saveData } from './storage';
+	conflictIds,
+	defaultPlacements,
+	designFurniture,
+	GEO,
+	placementsOf,
+	samePlacements,
+	type Placements
+} from './room';
+import { loadDraft, saveDraft, type RemixSource } from './storage';
 import type { Furniture } from './types';
 
 /**
- * Central app state: room inputs and furniture. The selection mirrors the URL
- * (`/furnish?item=…`) and is set by that page.
+ * Central app state: the Draft, i.e. every Piece of the Inventory with its position, plus the
+ * Design it was remixed from. The selection mirrors the URL (`/furnish?item=…`) and is set by
+ * that page.
  */
 class Planner {
-	cfg = $state(clone(DEFAULT_CFG));
-	furn = $state<Furniture[]>([]);
-	measured = $state(false);
+	readonly geo = GEO;
+	furn = $state<Furniture[]>(designFurniture(defaultPlacements()));
+	remixedFrom = $state<RemixSource | undefined>();
 
 	selectedId = $state<string | null>(null);
 	saved = $state(true);
 	canUndo = $state(false);
 	canRedo = $state(false);
 
-	/* Undo history as JSON snapshots; `current` is the state shown now */
+	/* Undo history as JSON snapshots of the placements; `current` is the state shown now */
 	private past: string[] = [];
 	private future: string[] = [];
 	private current = '';
 	private latest = '';
 	private pending: ReturnType<typeof setTimeout> | undefined;
 
-	geo = $derived(computeGeometry(this.cfg));
 	checks = $derived<Record<string, FurnitureCheck>>(
 		Object.fromEntries(this.furn.map((f) => [f.id, checkFurniture(f, this.furn, this.geo)]))
 	);
+	/** Pieces with a Conflict; the Draft can only be published without any */
+	conflicts = $derived(conflictIds(this.furn));
 	selected = $derived(this.furn.find((f) => f.id === this.selectedId) ?? null);
 
 	constructor() {
 		if (typeof localStorage === 'undefined') return;
-		const data = loadData();
-		this.cfg = data.cfg;
-		this.furn = data.furn;
-		this.measured = data.measured;
+		const draft = loadDraft();
+		this.furn = designFurniture(draft.placements);
+		this.remixedFrom = draft.remixedFrom;
 	}
 
-	/** Persists the data and records an undo step. Called on every change. */
+	get placements(): Placements {
+		return placementsOf($state.snapshot(this.furn));
+	}
+
+	/** Whether the Draft still is the starting arrangement (nothing would be lost replacing it). */
+	get isDefault() {
+		return samePlacements(this.placements, defaultPlacements());
+	}
+
+	/** Persists the Draft and records an undo step. Called on every change. */
 	save() {
-		const data = $state.snapshot({ cfg: this.cfg, furn: this.furn, measured: this.measured });
-		this.saved = saveData(data);
-		this.latest = JSON.stringify(data);
+		const placements = this.placements;
+		this.saved = saveDraft({
+			placements,
+			...(this.remixedFrom && { remixedFrom: $state.snapshot(this.remixedFrom) })
+		});
+		this.latest = JSON.stringify(placements);
 		if (!this.current) this.current = this.latest;
 		// Changes in quick succession (a drag, typing) become one undo step
 		clearTimeout(this.pending);
@@ -87,10 +99,7 @@ class Planner {
 
 	private restore(json: string) {
 		this.current = this.latest = json;
-		const d = JSON.parse(json);
-		this.cfg = d.cfg;
-		this.furn = d.furn;
-		this.measured = d.measured;
+		this.furn = designFurniture(JSON.parse(json));
 		this.updateHistoryFlags();
 	}
 
@@ -99,47 +108,21 @@ class Planner {
 		this.canRedo = this.future.length > 0;
 	}
 
-	/**
-	 * Adds a piece at `at` (plan cm) or in the middle of the room; numbered if the name is
-	 * taken. Returns the reactive piece.
-	 */
-	add(preset: Preset = CATALOG[CATALOG.length - 1], at?: [number, number]): Furniture {
-		const g = this.geo;
-		let name = preset.name;
-		for (let i = 2; this.furn.some((x) => x.name === name); i++) name = `${preset.name} ${i}`;
-		const f: Furniture = {
-			id: newId(),
-			name,
-			kind: preset.kind,
-			w: preset.w,
-			d: preset.d,
-			h: preset.h,
-			cx: Math.round(at?.[0] ?? g.W / 2),
-			cy: Math.round(at?.[1] ?? (g.hasNotch ? (g.N + g.L) / 2 : g.L / 2)),
-			rot: 0,
-			color: preset.color,
-			...(preset.model && { model: preset.model })
-		};
-		keepInside(f, g);
-		this.furn.push(f);
-		return this.furn[this.furn.length - 1];
+	/** Replaces the Draft with a Published Design's placements (Remix). Can't be undone. */
+	remix(placements: Placements, from: RemixSource) {
+		clearTimeout(this.pending);
+		this.pending = undefined;
+		this.past = [];
+		this.future = [];
+		this.current = '';
+		this.updateHistoryFlags();
+		this.furn = designFurniture(placements);
+		this.remixedFrom = from;
 	}
 
-	duplicate(f: Furniture): Furniture {
-		const copy = {
-			...$state.snapshot(f),
-			id: newId(),
-			name: f.name + ' (copy)',
-			cx: f.cx + 20,
-			cy: f.cy + 20
-		};
-		keepInside(copy, this.geo);
-		this.furn.push(copy);
-		return this.furn[this.furn.length - 1];
-	}
-
-	remove(f: Furniture) {
-		this.furn = this.furn.filter((x) => x.id !== f.id);
+	/** After publishing, the next Design is no longer a remix. */
+	published() {
+		this.remixedFrom = undefined;
 	}
 
 	/** Drag move; snaps to walls and other pieces unless `snap` is false. */
@@ -153,14 +136,9 @@ class Planner {
 		keepInside(f, this.geo);
 	}
 
-	/** Pushes every piece back inside the walls (after rotating, resizing or a room change). */
+	/** Pushes every piece back inside the walls (after rotating or nudging with the keys). */
 	keepAllInside() {
 		for (const f of this.furn) keepInside(f, this.geo);
-	}
-
-	resetRoom() {
-		this.cfg = clone(DEFAULT_CFG);
-		this.measured = false;
 	}
 }
 

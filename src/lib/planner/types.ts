@@ -49,10 +49,4 @@ export interface Furniture {
 	model?: string;
 }
 
-export interface PlannerData {
-	cfg: RoomConfig;
-	furn: Furniture[];
-	measured: boolean;
-}
-
 export type Point = [number, number];

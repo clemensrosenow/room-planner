@@ -1,9 +1,8 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 
-/** The app's three steps, in order. */
+/** The app's steps for working on the Draft, in order. */
 export const STEPS = [
-	{ path: '/room', label: 'Shape' },
 	{ path: '/furnish', label: 'Furnish' },
 	{ path: '/experience', label: 'Experience' }
 ] as const;

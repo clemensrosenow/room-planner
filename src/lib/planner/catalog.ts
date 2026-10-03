@@ -1,19 +1,6 @@
 /** Furniture types: decide the icon and the realistic model in the preview. */
 export type Kind = 'bed' | 'desk' | 'chair' | 'wardrobe' | 'shelf' | 'nightstand' | 'lamp' | 'box';
 
-export const KINDS: { kind: Kind; label: string }[] = [
-	{ kind: 'bed', label: 'Bed' },
-	{ kind: 'desk', label: 'Desk / table' },
-	{ kind: 'chair', label: 'Chair' },
-	{ kind: 'wardrobe', label: 'Wardrobe' },
-	{ kind: 'shelf', label: 'Shelf' },
-	{ kind: 'nightstand', label: 'Nightstand' },
-	{ kind: 'lamp', label: 'Lamp' },
-	{ kind: 'box', label: 'Plain box' }
-];
-
-export const isKind = (v: unknown): v is Kind => KINDS.some((k) => k.kind === v);
-
 /** Guess by name (English and German), first match wins. For pieces saved without a kind. */
 const BY_NAME: [Kind, RegExp][] = [
 	['nightstand', /night|bedside|nacht/i],
@@ -86,32 +73,3 @@ export const MODELS: Record<string, ModelInfo> = {
 };
 
 export const modelInfo = (f: { model?: string }) => (f.model ? MODELS[f.model] : undefined);
-
-export interface Preset {
-	name: string;
-	kind: Kind;
-	w: number;
-	d: number;
-	h: number;
-	color: number;
-	/** Id in MODELS */
-	model?: string;
-}
-
-const fromModel = (name: string, model: string, color = 0): Preset => {
-	const m = MODELS[model];
-	return { name, kind: m.kind, ...m.size, color, model };
-};
-
-/** The catalog dock: the real pieces of the room, sizes in cm. */
-export const CATALOG: Preset[] = [
-	{ name: 'Boxspring bed', kind: 'bed', w: 140, d: 210, h: 50, color: 0 },
-	{ name: 'Wardrobe', kind: 'wardrobe', w: 150, d: 70, h: 218, color: 4 },
-	{ name: 'Desk', kind: 'desk', w: 125, d: 50, h: 78, color: 1 },
-	{ name: 'Chair', kind: 'chair', w: 50, d: 50, h: 90, color: 3 },
-	fromModel('Kallax', 'ikea-kallax'),
-	{ name: 'Nightstand', kind: 'nightstand', w: 38, d: 43, h: 63, color: 4 },
-	fromModel('Nymo lamp', 'ikea-nymo-lamp', 2),
-	fromModel('Floor lamp', 'ikea-skaftet-lamp', 2),
-	fromModel('Ceiling lamp', 'ikea-ps2014-lamp', 2)
-];

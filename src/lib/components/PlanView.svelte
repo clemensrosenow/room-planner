@@ -1,21 +1,4 @@
-<script lang="ts" module>
-	import type { Point as P } from '#lib/planner/types.ts';
-
-	/** Coordinate helpers handed to overlays drawn on top of the plan. */
-	export interface PlanApi {
-		/** Screen pixels per cm */
-		scale: number;
-		width: number;
-		height: number;
-		/** Plan point (cm) → pixels within the view */
-		toScreen: (p: P) => { x: number; y: number };
-		/** Pointer → plan point (cm) */
-		toPlan: (e: { clientX: number; clientY: number }) => P;
-	}
-</script>
-
 <script lang="ts">
-	import type { Snippet } from 'svelte';
 	import { PALETTE } from '#lib/planner/defaults.ts';
 	import { cm, m2 } from '#lib/planner/format.ts';
 	import { bbox, describeCheck, normalizeAngle } from '#lib/planner/furniture.ts';
@@ -26,18 +9,19 @@
 
 	interface Props {
 		showDims: boolean;
-		/** Furniture can be selected and dragged; otherwise it is only shown faintly */
-		editable?: boolean;
+		/** Pieces to show; the Draft (selectable and draggable) when omitted */
+		furn?: Furniture[];
 		/** Double-click on a piece */
 		onopen?: (id: string) => void;
 		/** Screen position above the selected piece (px within this view) */
 		onanchor?: (p: { x: number; y: number } | null) => void;
-		/** Extra SVG drawn on top of the plan (in plan units) */
-		overlay?: Snippet<[PlanApi]>;
-		/** HTML on top of the plan, positioned with `api.toScreen` */
-		htmlOverlay?: Snippet<[PlanApi]>;
 	}
-	let { showDims, editable = true, onopen, onanchor, overlay, htmlOverlay }: Props = $props();
+	let { showDims, furn, onopen, onanchor }: Props = $props();
+
+	/** Only the Draft can be edited; a Published Design is read-only */
+	const editable = $derived(!furn);
+	const pieces = $derived(furn ?? planner.furn);
+	const checks = $derived(editable ? planner.checks : {});
 
 	let wrap = $state<HTMLDivElement>();
 	let svg = $state<SVGSVGElement>();
@@ -58,25 +42,6 @@
 	// Font sizes and tick size in plan units, so they look constant on screen
 	const scale = $derived(Math.min((width || 600) / vb.w, (height || 500) / vb.h));
 
-	/** Same mapping as the SVG's viewBox with xMidYMid meet, without reading the DOM */
-	const api = $derived.by<PlanApi>(() => {
-		const s = scale;
-		const w = width || 600;
-		const h = height || 500;
-		const ox = (w - vb.w * s) / 2;
-		const oy = (h - vb.h * s) / 2;
-		const { minX, minY } = vb;
-		return {
-			scale: s,
-			width: w,
-			height: h,
-			toScreen: ([x, y]) => ({ x: (x - minX) * s + ox, y: (y - minY) * s + oy }),
-			toPlan: (e) => {
-				const r = wrap!.getBoundingClientRect();
-				return [(e.clientX - r.left - ox) / s + minX, (e.clientY - r.top - oy) / s + minY];
-			}
-		};
-	});
 	const fs = $derived(11.5 / scale);
 	const fsS = $derived(10.5 / scale);
 	const tk = $derived(4 / scale);
@@ -142,7 +107,7 @@
 
 	/** Distances from the selected piece to the walls. */
 	const distances = $derived.by(() => {
-		const f = planner.selected;
+		const f = sel;
 		if (!f) return [];
 		const b = bbox(f);
 		const cx = (b.minX + b.maxX) / 2;
@@ -165,24 +130,13 @@
 	}
 
 	/** Doors whose swing area any piece blocks */
-	const blocked = $derived(new Set(Object.values(planner.checks).flatMap((c) => c.doors)));
+	const blocked = $derived(new Set(Object.values(checks).flatMap((c) => c.doors)));
 
-	/* ---------- Selection handles: resize from edges/corners, rotate with the knob ---------- */
+	/* ---------- Selection: rotate with the knob ---------- */
 	const sel = $derived(editable ? planner.selected : null);
-	/** Handle positions in the piece's own frame, as signs of half width/depth */
-	const HANDLES: { id: string; sx: number; sy: number; cursor: string }[] = [
-		{ id: 'nw', sx: -1, sy: -1, cursor: 'nwse-resize' },
-		{ id: 'n', sx: 0, sy: -1, cursor: 'ns-resize' },
-		{ id: 'ne', sx: 1, sy: -1, cursor: 'nesw-resize' },
-		{ id: 'e', sx: 1, sy: 0, cursor: 'ew-resize' },
-		{ id: 'se', sx: 1, sy: 1, cursor: 'nwse-resize' },
-		{ id: 's', sx: 0, sy: 1, cursor: 'ns-resize' },
-		{ id: 'sw', sx: -1, sy: 1, cursor: 'nesw-resize' },
-		{ id: 'w', sx: -1, sy: 0, cursor: 'ew-resize' }
-	];
 	const knob = $derived(sel ? sel.d / 2 + 26 / scale : 0);
 
-	/** Size or angle shown only while resizing or rotating */
+	/** Angle shown only while rotating */
 	let live = $state('');
 
 	// Tell the page where the selected piece is on screen, for the floating toolbar
@@ -199,26 +153,9 @@
 	});
 	$effect(() => () => onanchor?.(null));
 
-	/** Plan point (cm) under a screen point, or null outside the view. */
-	export function planPoint(clientX: number, clientY: number): Point | null {
-		const r = wrap?.getBoundingClientRect();
-		if (
-			!svg ||
-			!r ||
-			clientX < r.left ||
-			clientX > r.right ||
-			clientY < r.top ||
-			clientY > r.bottom
-		)
-			return null;
-		const p = new DOMPoint(clientX, clientY).matrixTransform(svg.getScreenCTM()!.inverse());
-		return [p.x, p.y];
-	}
-
 	/* ---------- Dragging ---------- */
 	type Drag =
 		| { mode: 'move'; f: Furniture; x: number; y: number; cx: number; cy: number }
-		| { mode: 'resize'; f: Furniture; sx: number; sy: number; start: Furniture }
 		| { mode: 'rotate'; f: Furniture };
 	let drag: Drag | null = null;
 
@@ -231,12 +168,8 @@
 		if (!editable) return;
 		const target = e.target as Element;
 		const handle = target.closest<SVGElement>('[data-handle]')?.dataset.handle;
-		const f0 = sel;
-		if (handle && f0) {
-			const h = HANDLES.find((x) => x.id === handle);
-			drag = h
-				? { mode: 'resize', f: f0, sx: h.sx, sy: h.sy, start: { ...$state.snapshot(f0) } }
-				: { mode: 'rotate', f: f0 };
+		if (handle && sel) {
+			drag = { mode: 'rotate', f: sel };
 		} else {
 			const el = target.closest<SVGElement>('[data-fid]');
 			const f = el && planner.furn.find((x) => x.id === el.dataset.fid);
@@ -262,29 +195,7 @@
 			// 15° steps, Alt for any angle
 			drag.f.rot = normalizeAngle(e.altKey ? Math.round(deg) : Math.round(deg / 15) * 15);
 			live = `${drag.f.rot}°`;
-		} else {
-			resize(drag, x, y, e.shiftKey ? 10 : 1);
 		}
-	}
-
-	/** Moves the dragged edge(s) to the pointer; the opposite edge stays put. */
-	function resize(d: Extract<Drag, { mode: 'resize' }>, x: number, y: number, step: number) {
-		const s = d.start;
-		const a = (s.rot * Math.PI) / 180;
-		const [cos, sin] = [Math.cos(a), Math.sin(a)];
-		// Pointer in the piece's own (unrotated) frame
-		const lx = (x - s.cx) * cos + (y - s.cy) * sin;
-		const ly = -(x - s.cx) * sin + (y - s.cy) * cos;
-		const size = (v: number) => Math.max(5, Math.round(v / step) * step);
-		const w = d.sx ? size(d.sx * lx + s.w / 2) : s.w;
-		const dd = d.sy ? size(d.sy * ly + s.d / 2) : s.d;
-		const ox = (d.sx * (w - s.w)) / 2;
-		const oy = (d.sy * (dd - s.d)) / 2;
-		d.f.w = w;
-		d.f.d = dd;
-		d.f.cx = s.cx + ox * cos - oy * sin;
-		d.f.cy = s.cy + ox * sin + oy * cos;
-		live = `${cm(w)} × ${cm(dd)}`;
 	}
 
 	function onpointerup() {
@@ -432,10 +343,10 @@
 		{/if}
 
 		<!-- Furniture -->
-		{#each planner.furn as f (f.id)}
-			{@const bad = planner.checks[f.id]?.bad}
+		{#each pieces as f (f.id)}
+			{@const bad = checks[f.id]?.bad}
 			{@const label = labelFits(f)}
-			{#if bad && editable}
+			{#if bad}
 				<!-- Soft red glow around pieces with a problem -->
 				<rect
 					class="glow"
@@ -450,7 +361,7 @@
 			{/if}
 			<rect
 				data-fid={f.id}
-				class={['furn', bad && 'bad', planner.selectedId === f.id && 'sel']}
+				class={['furn', bad && 'bad', sel?.id === f.id && 'sel']}
 				vector-effect="non-scaling-stroke"
 				x={-f.w / 2}
 				y={-f.d / 2}
@@ -462,9 +373,9 @@
 				ondblclick={() => onopen?.(f.id)}
 				role="presentation"
 			>
-				<title>{[f.name, ...describeCheck(planner.checks[f.id])].join(' · ')}</title>
+				<title>{[f.name, ...describeCheck(checks[f.id])].join(' · ')}</title>
 			</rect>
-			<!-- The live size readout replaces the name while resizing -->
+			<!-- The live angle replaces the name while rotating -->
 			{#if label.show && !(live && sel?.id === f.id)}
 				<text
 					class="furn-name"
@@ -523,17 +434,6 @@
 				>
 					<title>Drag to rotate (15° steps, Alt: free)</title>
 				</circle>
-				{#each sel.model ? [] : HANDLES as h (h.id)}
-					<circle
-						class="handle"
-						data-handle={h.id}
-						cx={(h.sx * sel.w) / 2}
-						cy={(h.sy * sel.d) / 2}
-						{r}
-						style:cursor={h.cursor}
-						vector-effect="non-scaling-stroke"
-					/>
-				{/each}
 			</g>
 			{#if live}
 				<text
@@ -555,10 +455,7 @@
 		/>
 		<text class="dimt" x={sx + 50} y={sy - fsS * 0.6} font-size={fsS} text-anchor="middle">1 m</text
 		>
-
-		{@render overlay?.(api)}
 	</svg>
-	{@render htmlOverlay?.(api)}
 </div>
 
 <style>
@@ -646,7 +543,6 @@
 		fill: var(--warn);
 		fill-opacity: 0.18;
 	}
-	.handle,
 	.knob {
 		fill: var(--sheet);
 		stroke: var(--accent);
@@ -670,11 +566,6 @@
 	}
 	.readonly .furn {
 		cursor: default;
-		opacity: 0.35;
-		filter: none;
-	}
-	.readonly .furn-name {
-		opacity: 0.4;
 	}
 	.dist {
 		stroke: var(--accent);
