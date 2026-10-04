@@ -445,23 +445,6 @@ export class RoomScene {
 		return this.glowTexture;
 	}
 
-	/** Floor point (plan cm) under a screen point, or null outside the canvas. */
-	planPoint(clientX: number, clientY: number): Point | null {
-		const r = this.renderer.domElement.getBoundingClientRect();
-		if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null;
-		const ray = new THREE.Raycaster();
-		ray.setFromCamera(
-			new THREE.Vector2(
-				((clientX - r.left) / r.width) * 2 - 1,
-				-((clientY - r.top) / r.height) * 2 + 1
-			),
-			this.camera
-		);
-		const hit = new THREE.Vector3();
-		if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return null;
-		return [hit.x, hit.z];
-	}
-
 	/** Tells the page where to float the selection toolbar (only when it moved). */
 	private reportAnchor() {
 		const piece = this.selected && this.pieces.get(this.selected.id);

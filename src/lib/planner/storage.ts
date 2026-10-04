@@ -1,7 +1,5 @@
-import { isKind, MODELS } from './catalog';
-import { DEFAULT_CFG, DEFAULT_FURN } from './defaults';
-import { newId } from './format';
-import type { Furniture, PlannerData, RoomConfig } from './types';
+import { INVENTORY, parsePlacements, type Placements } from './room';
+import type { Furniture } from './types';
 
 const KEY = 'room-planner-v1';
 const VIEW_KEY = KEY + '-view';
@@ -9,60 +7,75 @@ const STEP_KEY = KEY + '-step';
 
 export const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o));
 
-/** Fills missing or invalid values from the defaults (shape follows `def`). */
-function normalizeConfig<T extends object>(src: unknown, def: T): T {
-	const s = (src && typeof src === 'object' ? src : {}) as Record<string, unknown>;
+/** The Published Design a Draft was remixed from, for "Remix of X by Y". */
+export interface RemixSource {
+	id: string;
+	title: string;
+	designer: string | null;
+}
+
+/** The Draft: where each Piece stands, and what it was remixed from. */
+export interface Draft {
+	placements: Placements;
+	remixedFrom?: RemixSource;
+}
+
+/**
+ * Schema 1 stored free furniture (any name, size, number of pieces). Each Piece keeps the
+ * position of the old piece that matches it best: same model, then same name, then same type.
+ */
+function migrateV1(furn: unknown): Placements {
+	const old = (Array.isArray(furn) ? furn : []).filter(
+		(f): f is Partial<Furniture> => !!f && typeof f === 'object'
+	);
+	const used = new Set<Partial<Furniture>>();
 	const out: Record<string, unknown> = {};
-	for (const [k, dv] of Object.entries(def)) {
-		const sv = s[k];
-		if (dv && typeof dv === 'object') out[k] = normalizeConfig(sv, dv);
-		else if (typeof dv === 'number') out[k] = Number.isFinite(Number(sv)) ? Number(sv) : dv;
-		else out[k] = typeof sv === 'string' && sv ? sv : dv;
-	}
-	return out as T;
+	const tests: ((o: Partial<Furniture>, p: (typeof INVENTORY)[number]) => boolean)[] = [
+		(o, p) => !!p.model && o.model === p.model,
+		(o, p) => o.name === p.name,
+		(o, p) => !p.model && o.kind === p.kind
+	];
+	for (const test of tests)
+		for (const p of INVENTORY) {
+			if (p.id in out) continue;
+			const match = old.find((o) => !used.has(o) && test(o, p));
+			if (!match) continue;
+			used.add(match);
+			out[p.id] = { cx: match.cx, cy: match.cy, rot: match.rot };
+		}
+	return parsePlacements(out, true);
 }
 
-function normalizeFurniture(arr: unknown): Furniture[] {
-	if (!Array.isArray(arr)) return clone(DEFAULT_FURN);
-	const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d);
-	return arr
-		.filter((f) => f && typeof f === 'object')
-		.map((f) => ({
-			id: String(f.id || newId()),
-			name: String(f.name ?? 'Box'),
-			w: Math.max(1, num(f.w, 100)),
-			d: Math.max(1, num(f.d, 60)),
-			h: Math.max(1, num(f.h, 75)),
-			cx: num(f.cx, 175),
-			cy: num(f.cy, 300),
-			rot: num(f.rot, 0),
-			color: Math.abs(Math.round(num(f.color, 0))) % 5,
-			...(isKind(f.kind) && { kind: f.kind }),
-			...(typeof f.model === 'string' && f.model in MODELS && { model: f.model })
-		}));
+function parseRemix(v: unknown): RemixSource | undefined {
+	const r = v as Partial<RemixSource> | null;
+	if (!r || typeof r.id !== 'string' || typeof r.title !== 'string') return undefined;
+	return { id: r.id, title: r.title, designer: typeof r.designer === 'string' ? r.designer : null };
 }
 
-export function loadData(): PlannerData {
+export function loadDraft(): Draft {
 	try {
 		const raw = localStorage.getItem(KEY);
 		if (raw) {
 			const d = JSON.parse(raw);
-			return {
-				cfg: normalizeConfig<RoomConfig>(d.cfg, DEFAULT_CFG),
-				furn: normalizeFurniture(d.furn),
-				measured: !!d.measured
-			};
+			if (d.schema === 2) {
+				const remixedFrom = parseRemix(d.remixedFrom);
+				return {
+					placements: parsePlacements(d.placements, true),
+					...(remixedFrom && { remixedFrom })
+				};
+			}
+			return { placements: migrateV1(d.furn) };
 		}
 	} catch {
-		// Storage blocked or corrupt: fall back to defaults
+		// Storage blocked or corrupt: start from the default arrangement
 	}
-	return { cfg: clone(DEFAULT_CFG), furn: clone(DEFAULT_FURN), measured: false };
+	return { placements: parsePlacements({}, true) };
 }
 
 /** Returns false if saving failed (storage blocked or full). */
-export function saveData(data: PlannerData): boolean {
+export function saveDraft(draft: Draft): boolean {
 	try {
-		localStorage.setItem(KEY, JSON.stringify({ schema: 1, ...data }));
+		localStorage.setItem(KEY, JSON.stringify({ schema: 2, ...draft }));
 		return true;
 	} catch {
 		return false;
@@ -73,15 +86,15 @@ export function saveData(data: PlannerData): boolean {
 export function loadStep(): string {
 	try {
 		const step = localStorage.getItem(STEP_KEY);
-		if (step?.startsWith('/')) return step;
-		// Before steps existed, only the view was remembered
+		// The Shape step is gone
+		if (step?.startsWith('/') && !step.startsWith('/room')) return step;
 		const view = localStorage.getItem(VIEW_KEY);
 		if (view === 'preview') return '/experience';
-		if (view) return view === 'plan' ? '/furnish?view=plan' : '/furnish';
+		if (view === 'plan') return '/furnish?view=plan';
 	} catch {
 		// Storage blocked: start at the beginning
 	}
-	return '/room';
+	return '/furnish';
 }
 
 export function saveStep(step: string) {

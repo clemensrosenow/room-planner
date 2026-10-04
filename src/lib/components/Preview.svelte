@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { planner } from '#lib/planner/planner.svelte.ts';
+	import type { Furniture } from '#lib/planner/types.ts';
 	import { PreviewScene, type CameraMode } from '#lib/preview/PreviewScene.ts';
 	import { makeShots } from '#lib/preview/shots.ts';
 	import { dayGradient, dayOfYear, formatTime, sunDirection } from '#lib/preview/sun.ts';
@@ -9,6 +10,16 @@
 	import FloatingBar from './ui/FloatingBar.svelte';
 	import Icon from './ui/Icon.svelte';
 	import IconButton from './ui/IconButton.svelte';
+
+	interface Props {
+		/** Pieces to show; the Draft when omitted */
+		furn?: Furniture[];
+		/** Viewpoint without ?shot= */
+		defaultShot?: string;
+		/** Explain the walking controls at the top */
+		hint?: boolean;
+	}
+	let { furn, defaultShot = 'door', hint = true }: Props = $props();
 
 	const DEFAULT_TIME = 10;
 
@@ -29,7 +40,8 @@
 	let failed = $state(false);
 
 	let mode = $state<CameraMode>('walk');
-	let activeShot = $state(params.get('shot') ?? 'door');
+	// svelte-ignore state_referenced_locally
+	let activeShot = $state(params.get('shot') ?? defaultShot);
 	let hours = $state(parseTime(params.get('time')));
 	let lamp = $state(params.get('lamp') === '1');
 
@@ -57,7 +69,7 @@
 	$effect(() => {
 		const s = scene;
 		if (!s) return;
-		s.build(planner.geo, $state.snapshot(planner.furn));
+		s.build(planner.geo, $state.snapshot(furn ?? planner.furn));
 		if (placed) return;
 		placed = true;
 		// Untracked: picking a shot or mode later must not rebuild the scene
@@ -74,7 +86,7 @@
 	// Mirror the state into the URL (debounced, the slider changes it quickly)
 	$effect(() => {
 		const next = {
-			shot: activeShot && activeShot !== 'door' ? activeShot : null,
+			shot: activeShot && activeShot !== defaultShot ? activeShot : null,
 			time: hours !== DEFAULT_TIME ? formatTime(hours).replace(':', 'h') : null,
 			lamp: lamp ? 1 : null,
 			mode: mode === 'tour' ? mode : null
@@ -146,11 +158,13 @@
 		</div>
 	{:else}
 		{#if mode === 'walk'}
-			<p
-				class="pointer-events-none absolute inset-x-0 top-20 mx-auto w-fit rounded-full bg-sheet/85 px-4 py-1.5 text-[13px] text-muted shadow-float backdrop-blur-md"
-			>
-				Drag to look around · ↑↓ to walk · ←→ to turn · scroll to zoom
-			</p>
+			{#if hint}
+				<p
+					class="pointer-events-none absolute inset-x-0 top-20 mx-auto w-fit rounded-full bg-sheet/85 px-4 py-1.5 text-[13px] text-muted shadow-float backdrop-blur-md"
+				>
+					Drag to look around · ↑↓ to walk · ←→ to turn · scroll to zoom
+				</p>
+			{/if}
 			<div class="absolute right-4 bottom-36 z-10 grid grid-cols-3 gap-1.5 md:bottom-20">
 				{#each pad as [key, icon, pos, label] (key)}
 					<button

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { RoomScene } from '#lib/planner/scene3d.ts';
-	import type { Point } from '#lib/planner/types.ts';
 	import { selectItem } from '#lib/url.ts';
 	import { onMount, untrack } from 'svelte';
 
@@ -24,11 +23,6 @@
 
 	export function resetCamera() {
 		scene?.fitCamera(planner.geo);
-	}
-
-	/** Floor point (plan cm) under a screen point, or null outside the view. */
-	export function planPoint(clientX: number, clientY: number): Point | null {
-		return scene?.planPoint(clientX, clientY) ?? null;
 	}
 
 	onMount(() => {

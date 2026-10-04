@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import CatalogDock from '#lib/components/CatalogDock.svelte';
 	import Inspector from '#lib/components/Inspector.svelte';
 	import PieceList from '#lib/components/PieceList.svelte';
 	import PlanView from '#lib/components/PlanView.svelte';
@@ -20,7 +19,6 @@
 	let showDims = $state(false);
 	let listOpen = $state(false);
 	let scene3d = $state<Scene3D>();
-	let planView = $state<PlanView>();
 
 	/** `?view=plan` shows the floor plan, anything else the 3D view */
 	const view = $derived(page.url.searchParams.get('view') === 'plan' ? 'plan' : '3d');
@@ -34,8 +32,7 @@
 		return () => (planner.selectedId = null);
 	});
 
-	// Drop the selection when the piece is gone (deleted, or removed by undo).
-	// This is the only place that deselects after a delete, so history goes back once.
+	// Drop the selection of a Piece that doesn't exist (an old link)
 	$effect(() => {
 		if (itemId && !planner.furn.some((f) => f.id === itemId)) selectItem(null);
 	});
@@ -56,11 +53,7 @@
 		setParams({ view: v === 'plan' ? 'plan' : null }, { replace: true });
 	}
 
-	/** Floor point under the pointer in whichever view is shown (for dropping new pieces) */
-	const planPoint = (x: number, y: number) =>
-		(view === 'plan' ? planView?.planPoint(x, y) : scene3d?.planPoint(x, y)) ?? null;
-
-	/** Arrow keys move the selected piece (1 cm, Shift 10 cm), R rotates, Delete removes, Esc steps back. */
+	/** Arrow keys move the selected piece (1 cm, Shift 10 cm), R rotates, Esc steps back. */
 	function onkeydown(e: KeyboardEvent) {
 		const t = e.target as HTMLElement;
 		if (e.defaultPrevented) return;
@@ -75,7 +68,6 @@
 		else if (e.key === 'ArrowUp') f.cy -= step;
 		else if (e.key === 'ArrowDown') f.cy += step;
 		else if (e.key === 'r' || e.key === 'R') planner.rotate(f, e.shiftKey ? -90 : 90);
-		else if (e.key === 'Delete' || e.key === 'Backspace') planner.remove(f);
 		else if (e.key === 'Escape') {
 			if (details) closeDetails();
 			else selectItem(null);
@@ -95,7 +87,7 @@
 {/snippet}
 
 <Workspace
-	title="Details"
+	title="Position"
 	sub={planner.selected?.name ?? ''}
 	panel={details && planner.selected ? inspector : undefined}
 	onclose={closeDetails}
@@ -116,7 +108,6 @@
 		{#if view === 'plan'}
 			<div class="absolute inset-0">
 				<PlanView
-					bind:this={planView}
 					{showDims}
 					onopen={openDetails}
 					onanchor={(p) => {
@@ -124,14 +115,6 @@
 					}}
 				/>
 			</div>
-		{/if}
-
-		{#if planner.furn.length === 0}
-			<p
-				class="pointer-events-none absolute inset-x-0 top-1/2 mx-auto w-fit rounded-full bg-sheet/85 px-5 py-2.5 text-[14px] font-semibold text-muted shadow-float backdrop-blur-md"
-			>
-				Drag furniture from below into your room
-			</p>
 		{/if}
 
 		{#if planner.selected && anchor}
@@ -185,8 +168,7 @@
 					['Drag', 'Move a piece; it snaps to walls and furniture (Alt: free)'],
 					['Arrow keys', 'Nudge 1 cm, with Shift 10 cm'],
 					['R', 'Rotate 90°'],
-					['Delete', 'Remove the selected piece'],
-					['Double-click', 'Exact sizes and details'],
+					['Double-click', 'Exact position'],
 					['Esc', 'Close details, then deselect'],
 					['Ctrl Z', 'Undo (Ctrl Shift Z redo)']
 				]}
@@ -197,15 +179,5 @@
 				<PieceList onpick={() => (listOpen = false)} />
 			</div>
 		{/if}
-	</div>
-
-	<!-- On phones the details sheet takes the space of the dock -->
-	<div
-		class={[
-			'pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4',
-			details && 'max-md:hidden'
-		]}
-	>
-		<CatalogDock {planPoint} />
 	</div>
 </Workspace>
