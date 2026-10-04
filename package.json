@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"models": "node scripts/convert-models.ts",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "drizzle-kit migrate"
+		"db:migrate": "drizzle-kit migrate",
+		"test:leaderboard": "npx -y tsx scripts/test-leaderboard.ts"
 	},
 	"devDependencies": {
 		"@gltf-transform/core": "^4.5.1",

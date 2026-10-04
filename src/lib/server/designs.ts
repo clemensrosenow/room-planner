@@ -1,4 +1,4 @@
-import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import {
 	conflictIds,
 	designFurniture,
@@ -114,36 +114,26 @@ function decodeCursor(s: string): Cursor {
 	throw new HttpFail(400, 'Invalid cursor');
 }
 
-/** Leaderboard page: Top = most Likes first, New = newest first. */
+/**
+ * Leaderboard page: Top = most Likes first, New = newest first. PAGE_SIZE designs per page;
+ * `nextCursor` is null on the last page.
+ *
+ * TODO(Clemens): implement.
+ * - Only designs of this Room (ROOM_ID).
+ * - Top: like_count desc, then created_at desc. New: created_at desc. Add a final tie-breaker so
+ *   the order is total (two designs can share likes and timestamp).
+ * - Keyset pagination: `cursor` holds the sort values of the last design of the previous page
+ *   (decodeCursor / encodeCursor above). Fetch the rows that come after it in the sort order.
+ *   Tip: fetch PAGE_SIZE + 1 rows to know whether there is a next page.
+ * - Each design needs `likedByMe` (see likedBy) and `mine`; toData(row, liked, hash) builds it.
+ * The indexes in schema.ts (designs_top_idx, designs_new_idx) match this order.
+ */
 export async function listDesigns(
 	sort: Sort,
 	cursor: string | null,
 	hash: string | null
 ): Promise<DesignPage> {
-	const where: SQL[] = [eq(designs.roomId, ROOM_ID)];
-	if (cursor) {
-		const [likeCount, createdAt, id] = decodeCursor(cursor);
-		where.push(
-			sort === 'top'
-				? sql`(${designs.likeCount}, ${designs.createdAt}, ${designs.id}) < (${likeCount}, ${createdAt}::timestamptz, ${id})`
-				: sql`(${designs.createdAt}, ${designs.id}) < (${createdAt}::timestamptz, ${id})`
-		);
-	}
-	const order =
-		sort === 'top'
-			? [desc(designs.likeCount), desc(designs.createdAt), desc(designs.id)]
-			: [desc(designs.createdAt), desc(designs.id)];
-	const rows = await db()
-		.select({ row: designs, liked: likedBy(hash) })
-		.from(designs)
-		.where(and(...where))
-		.orderBy(...order)
-		.limit(PAGE_SIZE + 1);
-	const page = rows.slice(0, PAGE_SIZE);
-	return {
-		designs: page.map((r) => toData(r.row, r.liked, hash)),
-		nextCursor: rows.length > PAGE_SIZE ? encodeCursor(page[page.length - 1].row) : null
-	};
+	throw new HttpFail(501, 'The Leaderboard is not implemented yet');
 }
 
 /* ---------- Publishing and deleting ---------- */
@@ -230,8 +220,14 @@ export async function remove(id: string, hash: string) {
 /* ---------- Likes ---------- */
 
 /**
- * Likes or unlikes (idempotent) and returns the new count. The Like row and the count change in
- * one statement, so they can't drift apart.
+ * Likes or unlikes and returns the new like count.
+ * - 404 if the design doesn't exist, 403 when liking your own (done below).
+ * - Idempotent: liking twice counts once, unliking something not liked changes nothing.
+ * - `likes` (one row per Like, primary key design_id + liker_hash) and `designs.like_count` must
+ *   never drift apart, even when two people like at the same moment.
+ * - A design deleted in the meantime should end in a 404, not a 500 (see pgCode).
+ *
+ * TODO(Clemens): implement the write.
  */
 export async function setLike(id: string, hash: string, liked: boolean): Promise<number> {
 	const [row] = isDesignId(id)
@@ -243,27 +239,5 @@ export async function setLike(id: string, hash: string, liked: boolean): Promise
 	if (!row) throw new HttpFail(404, 'Design not found');
 	if (liked && row.publisherHash === hash)
 		throw new HttpFail(403, "You can't like your own design");
-	try {
-		const res = await db().execute<{ like_count: number }>(
-			liked
-				? sql`with changed as (
-						insert into ${likes} (design_id, liker_hash) values (${id}, ${hash})
-						on conflict do nothing returning 1
-					)
-					update ${designs} set like_count = like_count + (select count(*) from changed)
-					where id = ${id} returning like_count`
-				: sql`with changed as (
-						delete from ${likes} where design_id = ${id} and liker_hash = ${hash} returning 1
-					)
-					update ${designs} set like_count = like_count - (select count(*) from changed)
-					where id = ${id} returning like_count`
-		);
-		const count = res.rows[0]?.like_count;
-		if (count === undefined) throw new HttpFail(404, 'Design not found');
-		return Number(count);
-	} catch (e) {
-		// Deleted in the meantime
-		if (pgCode(e) === '23503') throw new HttpFail(404, 'Design not found');
-		throw e;
-	}
+	throw new HttpFail(501, 'Likes are not implemented yet');
 }

@@ -53,6 +53,8 @@ npm run lint                 # formatting
 npm run build                # Vercel output in .vercel/output/
 ```
 
+`npm run test:leaderboard` checks Likes and the Leaderboard against the running dev server. It publishes 30 test designs and deletes them again, so use a development database.
+
 After changing `src/lib/server/schema.ts`, run `npm run db:generate` to add a migration in `drizzle/`, then `npm run db:migrate`. Without `DATABASE_URL` the planner still works; only sharing (the API, Designs pages) fails.
 
 ### API
