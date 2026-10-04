@@ -23,6 +23,7 @@
 		<IconButton icon="rotate-ccw" label="Rotate left" onclick={() => planner.rotate(f, -90)} />
 		<IconButton icon="rotate-cw" label="Rotate right (R)" onclick={() => planner.rotate(f, 90)} />
 		<IconButton icon="sliders" label="Exact position" onclick={ondetails} />
+		<IconButton icon="close" label="Put back (Delete)" onclick={() => planner.unplace(f.id)} />
 	</FloatingBar>
 	{#if problems.length}
 		<p

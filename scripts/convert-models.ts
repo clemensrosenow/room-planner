@@ -59,6 +59,8 @@ interface Source {
 	 * the pole, so the parts above and below keep their shape.
 	 */
 	shorten?: { at: number; height: number };
+	/** Gives parts their own material in a new color (sRGB hex), e.g. a frame sharing a material with legs. */
+	paint?: { parts: Parts; name: string; color: string }[];
 	/** Material changes by material name: new color (sRGB hex) and/or name. */
 	materials?: Record<string, { color?: string; rename?: string }>;
 	/**
@@ -134,6 +136,38 @@ const SOURCES: Source[] = [
 		// The real globe's top hangs 25 cm below the ceiling. Below the cut sit the pull cord and the
 		// globe (60.5 cm together after scaling), above it the ceiling cup; the cut shortens the cable.
 		shorten: { at: 70, height: 60.5 + 25 }
+	},
+	{
+		id: 'ikea-markus-chair',
+		archive: 'Officechair+Markus+(IKEA).zip',
+		entry: 'model.dae',
+		turn: 180,
+		// IKEA: 62 × 60 cm, 129 cm high with the seat at its lowest
+		resize: [{ size: { w: 62, d: 60, h: 129 } }]
+	},
+	{ id: 'yamaha-p45', archive: 'Yamaha+P45.zip', entry: 'model.dae' },
+	{ id: 'keyboard-stand', archive: 'stand_pour_clavier.zip', entry: 'scene.gltf' },
+	{
+		id: 'flipchart',
+		archive: 'flipchart.zip',
+		entry: 'scene.gltf',
+		// The model is about twice too big and its legs spread too wide
+		resize: [{ size: { w: 70, d: 65, h: 190 } }],
+		// The board's frame is white; the legs stay metal
+		paint: [
+			{
+				parts: { materials: ['SM_Flipchart_Metal-Iron'], y: [128, 347] },
+				name: 'frame',
+				color: WHITE
+			}
+		]
+	},
+	{
+		id: 'radiator',
+		archive: 'bedroom_heater_radiator.zip',
+		entry: 'scene.gltf',
+		// The real one is half as wide
+		resize: [{ size: { w: 70, d: 15, h: 90 } }]
 	}
 ];
 
@@ -368,6 +402,20 @@ function editMaterials(doc: Document, edits: NonNullable<Source['materials']> = 
 	}
 }
 
+function paintParts(doc: Document, paint: NonNullable<Source['paint']>[number]) {
+	const material = doc
+		.createMaterial(paint.name)
+		.setBaseColorFactor(linearColor(paint.color))
+		.setRoughnessFactor(0.4)
+		.setMetallicFactor(0);
+	const nodes = selectParts(doc, paint.parts);
+	if (!nodes.length) throw new Error('no parts match');
+	for (const node of nodes) {
+		bake(node, new Matrix4());
+		for (const prim of node.getMesh()!.listPrimitives()) prim.setMaterial(material);
+	}
+}
+
 function resizeParts(doc: Document, resize: NonNullable<Source['resize']>[number]) {
 	const nodes = selectParts(doc, resize.parts);
 	const { min, max } = boundsOf(nodes);
@@ -477,6 +525,7 @@ async function convert(source: Source) {
 	await doc.transform(prune(), dedup(), weld(), center({ pivot: 'below' }), flatten());
 	if (SHOW_PARTS) listParts(doc, source.id);
 	const before = renderedTriangles(doc);
+	for (const paint of source.paint ?? []) paintParts(doc, paint);
 	for (const resize of source.resize ?? []) resizeParts(doc, resize);
 	if (source.tube) replaceWithTube(doc, source.tube);
 	editMaterials(doc, source.materials);

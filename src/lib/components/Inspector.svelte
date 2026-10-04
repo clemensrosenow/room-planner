@@ -20,7 +20,13 @@
 		<h3 class="text-xs font-semibold tracking-wide text-muted uppercase">Size</h3>
 		<p class="text-[13px] tabular-nums">
 			{f.w} × {f.d} × {f.h} cm
-			<span class="text-muted">· {model ? `real model: ${model.label}` : 'the real piece'}</span>
+			<span class="text-muted"
+				>· {f.parts
+					? f.parts.map((p) => p.name).join(' + ')
+					: model
+						? `real model: ${model.label}`
+						: 'the real piece'}</span
+			>
 		</p>
 	</section>
 

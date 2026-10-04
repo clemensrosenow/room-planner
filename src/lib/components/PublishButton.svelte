@@ -6,17 +6,30 @@
 	import PublishDialog from './PublishDialog.svelte';
 	import Icon from './ui/Icon.svelte';
 
-	/** Opens the publish dialog; while the Draft has Conflicts, it points to the first one. */
+	/**
+	 * Opens the publish dialog. Until every Piece is placed it leads to the Furnish step, and while
+	 * the Draft has Conflicts it points to the first one.
+	 */
 	let open = $state(false);
 
-	const count = $derived(planner.conflicts.length);
+	const left = $derived(planner.unplaced.length);
+	const conflicts = $derived(planner.conflicts.length);
+	const blocked = $derived(left > 0 || conflicts > 0);
 	const hint = $derived(
-		count ? `Resolve ${count} conflict${count === 1 ? '' : 's'} first` : 'Publish and share'
+		left
+			? `Place ${left} more piece${left === 1 ? '' : 's'} first`
+			: conflicts
+				? `Resolve ${conflicts} conflict${conflicts === 1 ? '' : 's'} first`
+				: 'Publish and share'
 	);
 
 	function click() {
-		if (!count) {
+		if (!blocked) {
 			open = true;
+			return;
+		}
+		if (left) {
+			if (page.url.pathname !== '/furnish') goto('/furnish');
 			return;
 		}
 		const id = planner.conflicts[0];
@@ -26,14 +39,14 @@
 </script>
 
 <button
-	class={['btn btn-primary shadow-float', count && 'opacity-55']}
-	aria-disabled={count > 0}
+	class={['btn btn-primary shadow-float', blocked && 'opacity-55']}
+	aria-disabled={blocked}
 	title={hint}
 	onclick={click}
 >
-	<Icon name={count ? 'alert' : 'send'} size={15} />
+	<Icon name={blocked ? 'alert' : 'send'} size={15} />
 	<span class="max-sm:sr-only">Publish</span>
-	{#if count}<span class="sr-only">({hint})</span>{/if}
+	{#if blocked}<span class="sr-only">({hint})</span>{/if}
 </button>
 
 <PublishDialog {open} onclose={() => (open = false)} />

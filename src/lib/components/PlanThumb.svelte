@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PALETTE } from '#lib/planner/defaults.ts';
+	import { hexColor } from '#lib/planner/format.ts';
 	import { modelInfo } from '#lib/planner/catalog.ts';
 	import { buildWalls, segmentPolygon } from '#lib/planner/geometry.ts';
 	import { designFurniture, GEO, type Placements } from '#lib/planner/room.ts';
@@ -43,7 +43,7 @@
 			height={f.d}
 			rx={Math.min(5, f.w / 6, f.d / 6)}
 			transform="translate({f.cx} {f.cy}) rotate({f.rot})"
-			fill="var({PALETTE[f.color % PALETTE.length]})"
+			fill={hexColor(f.color)}
 			fill-opacity={ceiling ? 0.35 : 1}
 			stroke="color-mix(in srgb, var(--ink) 30%, transparent)"
 			stroke-width="1.5"

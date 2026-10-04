@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Inspector from '#lib/components/Inspector.svelte';
+	import InventoryDock from '#lib/components/InventoryDock.svelte';
 	import PieceList from '#lib/components/PieceList.svelte';
 	import PlanView from '#lib/components/PlanView.svelte';
 	import Scene3D from '#lib/components/Scene3D.svelte';
@@ -19,6 +20,7 @@
 	let showDims = $state(false);
 	let listOpen = $state(false);
 	let scene3d = $state<Scene3D>();
+	let planView = $state<PlanView>();
 
 	/** `?view=plan` shows the floor plan, anything else the 3D view */
 	const view = $derived(page.url.searchParams.get('view') === 'plan' ? 'plan' : '3d');
@@ -32,7 +34,7 @@
 		return () => (planner.selectedId = null);
 	});
 
-	// Drop the selection of a Piece that doesn't exist (an old link)
+	// Drop the selection of a Piece that isn't placed (an old link, put back, undone)
 	$effect(() => {
 		if (itemId && !planner.furn.some((f) => f.id === itemId)) selectItem(null);
 	});
@@ -53,7 +55,14 @@
 		setParams({ view: v === 'plan' ? 'plan' : null }, { replace: true });
 	}
 
-	/** Arrow keys move the selected piece (1 cm, Shift 10 cm), R rotates, Esc steps back. */
+	/** Floor point under the pointer in whichever view is shown (for dropping Pieces from the dock) */
+	const planPoint = (x: number, y: number) =>
+		(view === 'plan' ? planView?.planPoint(x, y) : scene3d?.planPoint(x, y)) ?? null;
+
+	/**
+	 * Arrow keys move the selected piece (1 cm, Shift 10 cm), R rotates, Delete puts it back into
+	 * the dock, Esc steps back.
+	 */
 	function onkeydown(e: KeyboardEvent) {
 		const t = e.target as HTMLElement;
 		if (e.defaultPrevented) return;
@@ -68,6 +77,7 @@
 		else if (e.key === 'ArrowUp') f.cy -= step;
 		else if (e.key === 'ArrowDown') f.cy += step;
 		else if (e.key === 'r' || e.key === 'R') planner.rotate(f, e.shiftKey ? -90 : 90);
+		else if (e.key === 'Delete' || e.key === 'Backspace') planner.unplace(f.id);
 		else if (e.key === 'Escape') {
 			if (details) closeDetails();
 			else selectItem(null);
@@ -108,6 +118,7 @@
 		{#if view === 'plan'}
 			<div class="absolute inset-0">
 				<PlanView
+					bind:this={planView}
 					{showDims}
 					onopen={openDetails}
 					onanchor={(p) => {
@@ -115,6 +126,14 @@
 					}}
 				/>
 			</div>
+		{/if}
+
+		{#if planner.furn.length === 0}
+			<p
+				class="pointer-events-none absolute inset-x-0 top-1/2 mx-auto w-fit rounded-full bg-sheet/85 px-5 py-2.5 text-[14px] font-semibold text-muted shadow-float backdrop-blur-md"
+			>
+				Drag your furniture from below into the room
+			</p>
 		{/if}
 
 		{#if planner.selected && anchor}
@@ -168,6 +187,7 @@
 					['Drag', 'Move a piece; it snaps to walls and furniture (Alt: free)'],
 					['Arrow keys', 'Nudge 1 cm, with Shift 10 cm'],
 					['R', 'Rotate 90°'],
+					['Delete', 'Put the piece back below'],
 					['Double-click', 'Exact position'],
 					['Esc', 'Close details, then deselect'],
 					['Ctrl Z', 'Undo (Ctrl Shift Z redo)']
@@ -179,5 +199,15 @@
 				<PieceList onpick={() => (listOpen = false)} />
 			</div>
 		{/if}
+	</div>
+
+	<!-- On phones the details sheet takes the space of the dock -->
+	<div
+		class={[
+			'pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4',
+			details && 'max-md:hidden'
+		]}
+	>
+		<InventoryDock {planPoint} />
 	</div>
 </Workspace>

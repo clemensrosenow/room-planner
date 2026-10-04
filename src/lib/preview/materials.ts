@@ -130,8 +130,7 @@ export const glass = () =>
 	});
 
 /** Powder-coated aluminium window frames. */
-export const frame = () =>
-	new THREE.MeshStandardMaterial({ color: 0x3b3e42, roughness: 0.5, metalness: 0.4 });
+export const frame = () => new THREE.MeshStandardMaterial({ color: 0xf3f2ee, roughness: 0.4 });
 
 export const doorLeaf = () => new THREE.MeshStandardMaterial({ color: 0xf6f5f1, roughness: 0.4 });
 
@@ -141,18 +140,18 @@ export const trim = () => new THREE.MeshStandardMaterial({ color: 0xf8f7f4, roug
 export const steel = () =>
 	new THREE.MeshStandardMaterial({ color: 0xb9bcbf, roughness: 0.3, metalness: 1 });
 
-/** Furniture colors matching the planner palette (light theme). */
-export const FURNITURE_COLORS = [0xd8b48e, 0xa3b6c9, 0xadc4a4, 0xd9a797, 0xbaabcb];
-
-/** Light oak with long grain, for tabletops, frames and legs. The texture covers 120 cm. */
-export function oak() {
+/**
+ * Light oak with long grain, for tabletops, frames and legs. The texture covers 120 cm. `pale` is
+ * white-stained oak, as on wardrobe sides.
+ */
+export function oak(pale = false) {
 	const rnd = random(19);
 	const size = 512;
 	const c = canvas(size, (x) => {
-		x.fillStyle = 'rgb(196,160,118)';
+		x.fillStyle = pale ? 'rgb(222,206,182)' : 'rgb(196,160,118)';
 		x.fillRect(0, 0, size, size);
 		for (let i = 0; i < 90; i++) {
-			x.strokeStyle = `rgba(120,80,40,${0.04 + rnd() * 0.1})`;
+			x.strokeStyle = `rgba(${pale ? '150,120,85' : '120,80,40'},${0.04 + rnd() * 0.1})`;
 			x.lineWidth = 0.5 + rnd() * 2;
 			const y = rnd() * size;
 			x.beginPath();
@@ -173,12 +172,36 @@ export function oak() {
 	return new THREE.MeshStandardMaterial({ map, roughness: 0.5 });
 }
 
-/** Woven upholstery in one of the palette colors. */
+/**
+ * Mirror glass. The environment map only holds the sky, so a true mirror would reflect a dark
+ * void; half metal, half bright diffuse reads as a mirror showing a light room.
+ */
+export const mirror = () =>
+	new THREE.MeshStandardMaterial({ color: 0xd9dde0, roughness: 0.16, metalness: 0.5 });
+
+/** Polished chrome tube. */
+export const chrome = () =>
+	new THREE.MeshStandardMaterial({ color: 0xe6e8eb, roughness: 0.2, metalness: 0.7 });
+
+/** Anodised aluminium profiles, e.g. sliding door frames. */
+export const aluminium = () =>
+	new THREE.MeshStandardMaterial({ color: 0xc4c7ca, roughness: 0.35, metalness: 0.9 });
+
+/** High-gloss white lacquer. */
+export const glossWhite = () =>
+	new THREE.MeshPhysicalMaterial({
+		color: 0xf4f2ec,
+		roughness: 0.15,
+		clearcoat: 1,
+		clearcoatRoughness: 0.05
+	});
+
+/** Woven upholstery in a color (sRGB hex). */
 export function fabric(color: number) {
 	const bumpMap = surfaceGrain().clone();
 	bumpMap.repeat.set(1 / 6, 1 / 6);
 	return new THREE.MeshPhysicalMaterial({
-		color: FURNITURE_COLORS[color % FURNITURE_COLORS.length],
+		color,
 		roughness: 0.95,
 		bumpMap,
 		bumpScale: 0.4,
@@ -189,12 +212,9 @@ export function fabric(color: number) {
 	});
 }
 
-/** Satin painted wood (cabinet fronts) in one of the palette colors. */
+/** Satin painted wood (cabinet fronts) in a color (sRGB hex). */
 export const lacquer = (color: number) =>
-	new THREE.MeshStandardMaterial({
-		color: FURNITURE_COLORS[color % FURNITURE_COLORS.length],
-		roughness: 0.42
-	});
+	new THREE.MeshStandardMaterial({ color, roughness: 0.42 });
 
 /** White bed linen. */
 export function linen() {

@@ -50,5 +50,70 @@
 		"triangles": 90947,
 		"trianglesBefore": 113450,
 		"bytes": 576752
+	},
+	{
+		"id": "ikea-markus-chair",
+		"file": "/models/ikea-markus-chair.glb",
+		"size": {
+			"w": 62,
+			"d": 60,
+			"h": 129
+		},
+		"mount": "floor",
+		"triangles": 14040,
+		"trianglesBefore": 14040,
+		"bytes": 1087324
+	},
+	{
+		"id": "yamaha-p45",
+		"file": "/models/yamaha-p45.glb",
+		"size": {
+			"w": 132.6,
+			"d": 29.8,
+			"h": 12.6
+		},
+		"mount": "floor",
+		"triangles": 20134,
+		"trianglesBefore": 20134,
+		"bytes": 180660
+	},
+	{
+		"id": "keyboard-stand",
+		"file": "/models/keyboard-stand.glb",
+		"size": {
+			"w": 98.1,
+			"d": 52.5,
+			"h": 67.8
+		},
+		"mount": "floor",
+		"triangles": 92850,
+		"trianglesBefore": 406864,
+		"bytes": 767756
+	},
+	{
+		"id": "flipchart",
+		"file": "/models/flipchart.glb",
+		"size": {
+			"w": 70,
+			"d": 65,
+			"h": 190
+		},
+		"mount": "floor",
+		"triangles": 492,
+		"trianglesBefore": 492,
+		"bytes": 11296
+	},
+	{
+		"id": "radiator",
+		"file": "/models/radiator.glb",
+		"size": {
+			"w": 70,
+			"d": 15,
+			"h": 90
+		},
+		"mount": "floor",
+		"triangles": 11398,
+		"trianglesBefore": 11398,
+		"bytes": 204136
 	}
 ]
