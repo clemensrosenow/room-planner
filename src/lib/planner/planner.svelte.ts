@@ -7,24 +7,24 @@ import {
 } from './furniture';
 import {
 	conflictIds,
-	defaultPlacements,
 	designFurniture,
 	GEO,
+	INVENTORY,
 	placementsOf,
-	samePlacements,
+	type Piece,
 	type Placements
 } from './room';
 import { loadDraft, saveDraft, type RemixSource } from './storage';
-import type { Furniture } from './types';
+import type { Furniture, Point } from './types';
 
 /**
- * Central app state: the Draft, i.e. every Piece of the Inventory with its position, plus the
- * Design it was remixed from. The selection mirrors the URL (`/furnish?item=…`) and is set by
+ * Central app state: the Draft, i.e. the Pieces of the Inventory placed so far with their
+ * positions, plus the Design it was remixed from. The selection mirrors the URL (`/furnish?item=…`) and is set by
  * that page.
  */
 class Planner {
 	readonly geo = GEO;
-	furn = $state<Furniture[]>(designFurniture(defaultPlacements()));
+	furn = $state<Furniture[]>([]);
 	remixedFrom = $state<RemixSource | undefined>();
 
 	selectedId = $state<string | null>(null);
@@ -44,6 +44,8 @@ class Planner {
 	);
 	/** Pieces with a Conflict; the Draft can only be published without any */
 	conflicts = $derived(conflictIds(this.furn));
+	/** Pieces not placed yet, waiting in the dock; the Draft can only be published without any */
+	unplaced = $derived(INVENTORY.filter((p) => !this.furn.some((f) => f.id === p.id)));
 	selected = $derived(this.furn.find((f) => f.id === this.selectedId) ?? null);
 
 	constructor() {
@@ -57,9 +59,9 @@ class Planner {
 		return placementsOf($state.snapshot(this.furn));
 	}
 
-	/** Whether the Draft still is the starting arrangement (nothing would be lost replacing it). */
-	get isDefault() {
-		return samePlacements(this.placements, defaultPlacements());
+	/** Whether the Draft is still empty (nothing would be lost replacing it). */
+	get isEmpty() {
+		return this.furn.length === 0;
 	}
 
 	/** Persists the Draft and records an undo step. Called on every change. */
@@ -129,6 +131,27 @@ class Planner {
 	/** After publishing, the next Design is no longer a remix. */
 	published() {
 		this.remixedFrom = undefined;
+	}
+
+	/**
+	 * Places a Piece from the dock with its center at `at` (default: the middle of the room),
+	 * pushed inside the walls. Keeps Inventory order, so lists and 3D stay stable.
+	 */
+	place(p: Piece, at?: Point): Furniture {
+		const [cx, cy] = at ?? [
+			this.geo.W / 2,
+			this.geo.hasNotch ? (this.geo.N + this.geo.L) / 2 : this.geo.L / 2
+		];
+		const f: Furniture = { ...structuredClone(p), cx: Math.round(cx), cy: Math.round(cy), rot: 0 };
+		keepInside(f, this.geo);
+		const order = (id: string) => INVENTORY.findIndex((q) => q.id === id);
+		this.furn = [...this.furn, f].sort((a, b) => order(a.id) - order(b.id));
+		return this.furn.find((x) => x.id === p.id)!;
+	}
+
+	/** Puts a Piece back into the dock. */
+	unplace(id: string) {
+		this.furn = this.furn.filter((f) => f.id !== id);
 	}
 
 	/** Drag move; snaps to walls and other pieces unless `snap` is false. */

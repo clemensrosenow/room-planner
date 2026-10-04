@@ -41,7 +41,22 @@ export interface Geometry {
 	/** Floor outline, clockwise */
 	poly: Point[];
 	doors: [Door, Door];
-	front: { wl: number; wr: number; gx0: number; gx1: number; gH: number; bOff: number; bW: number };
+	front: {
+		wl: number;
+		wr: number;
+		gx0: number;
+		gx1: number;
+		gH: number;
+		bOff: number;
+		bW: number;
+		/** Depth of the window bay: the wall pieces beside the glass end at y = L - bay */
+		bay: number;
+	};
+	/** Radiator footprint in plan coordinates, and its height */
+	radiator: { x0: number; x1: number; y0: number; y1: number; h: number } | null;
+	/** Fixed ceiling lamp: model id and plan position */
+	ceilingLamp: { model: string; x: number; y: number } | null;
+	curtains: { color: number; x0: number; x1: number } | null;
 	area: number;
 	loggiaArea: number;
 	/** Human-readable problems with the inputs (values were clamped) */
@@ -91,24 +106,38 @@ export function computeGeometry(c: RoomConfig): Geometry {
 		gx1 - bW,
 		'Balcony door lies outside the glass front. Check its offset from the left wall.'
 	);
+	const bay = clamp(c.front.bay ?? 0, 0, L - N - 40, 'Window bay is deeper than the room.');
 	const D = clamp(c.loggia.D, 0, 1000);
 	const PH = clamp(c.loggia.parapetH, 0, 200);
+	let radiator: Geometry['radiator'] = null;
+	if (c.radiator) {
+		// The right wall runs the full length; the left one starts at the hallway corner
+		const wallLen = (c.radiator.wall === 'right' ? L : L - (hasNotch ? N : 0)) - bay;
+		const w = clamp(c.radiator.w, 10, wallLen, 'Radiator is longer than its wall.');
+		const off = clamp(c.radiator.off, 0, wallLen - w, 'Radiator extends past its wall.');
+		const y1 = L - bay - off;
+		const d = clamp(c.radiator.d, 2, 60);
+		const x0 = c.radiator.wall === 'right' ? W - d : 0;
+		radiator = { x0, x1: x0 + d, y0: y1 - w, y1, h: clamp(c.radiator.h, 10, H) };
+	}
 
-	const poly: Point[] = hasNotch
+	// Floor outline; with a window bay the glass front sits `bay` deeper than the wall pieces
+	const front: Point[] = bay
 		? [
-				[NW, 0],
-				[W, 0],
-				[W, L],
-				[0, L],
-				[0, N],
-				[NW, N]
+				[W, L - bay],
+				[gx1, L - bay],
+				[gx1, L],
+				[gx0, L],
+				[gx0, L - bay],
+				[0, L - bay]
 			]
 		: [
-				[0, 0],
-				[W, 0],
 				[W, L],
 				[0, L]
 			];
+	const poly: Point[] = hasNotch
+		? [[NW, 0], [W, 0], ...front, [0, N], [NW, N]]
+		: [[0, 0], [W, 0], ...front];
 	const doors: [Door, Door] = [
 		makeDoor(
 			'door',
@@ -153,11 +182,34 @@ export function computeGeometry(c: RoomConfig): Geometry {
 		doorWallLen,
 		poly,
 		doors,
-		front: { wl, wr, gx0, gx1, gH, bOff, bW },
+		front: { wl, wr, gx0, gx1, gH, bOff, bW, bay },
+		radiator,
+		ceilingLamp: c.ceilingLamp
+			? { ...c.ceilingLamp, x: clamp(c.ceilingLamp.x, 0, W), y: clamp(c.ceilingLamp.y, 0, L) }
+			: null,
+		curtains: c.curtains ?? null,
 		area: W * L - (hasNotch ? NW * N : 0),
 		loggiaArea: W * D,
 		issues
 	};
+}
+
+/**
+ * The floor as rectangles (main part, the strip beside the hallway corner, the window bay). A box
+ * inside the floor always lies within one of them.
+ */
+export function floorRects(g: Geometry) {
+	const end = g.L - g.front.bay;
+	const top = g.hasNotch ? g.N : 0;
+	const rects = [{ x0: 0, y0: top, x1: g.W, y1: end }];
+	if (g.hasNotch) rects.push({ x0: g.NW, y0: 0, x1: g.W, y1: end });
+	if (g.front.bay) {
+		const { gx0, gx1 } = g.front;
+		rects.push({ x0: gx0, y0: top, x1: gx1, y1: g.L });
+		if (g.hasNotch && gx0 < g.W && gx1 > g.NW)
+			rects.push({ x0: Math.max(gx0, g.NW), y0: 0, x1: gx1, y1: g.L });
+	}
+	return rects;
 }
 
 /** outSign: direction (in y) that points out of the room through this wall. */
@@ -229,7 +281,10 @@ export function buildWalls(g: Geometry, wallH: number) {
 		const len = Math.hypot(E[0] - S[0], E[1] - S[1]);
 		const d: Point = [(E[0] - S[0]) / len, (E[1] - S[1]) / len];
 		const isBottom = S[1] === g.L && E[1] === g.L;
-		return { S, E, len, d, n: [d[1], -d[0]], t: isBottom ? g.tE : g.tI, isBottom };
+		// Wall pieces beside a window bay are as thick as the bay plus the exterior wall
+		const isPiece = g.front.bay > 0 && S[1] === g.L - g.front.bay && E[1] === S[1];
+		const t = isBottom ? g.tE : isPiece ? g.tE + g.front.bay : g.tI;
+		return { S, E, len, d, n: [d[1], -d[0]], t, isBottom };
 	});
 	// Convex corners need the walls extended so they meet
 	const convex = P.map((_, i) => {

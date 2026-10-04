@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { loadModel, modelClone } from '../preview/modelLoader';
+import { loadModel } from '../preview/modelLoader';
+import { buildPiece, MaterialKit } from '../preview/models';
 import { modelInfo } from './catalog';
-import { PALETTE } from './defaults';
 import { cm, cssVar } from './format';
 import { elevation, type FurnitureCheck } from './furniture';
 import { buildWalls, type Geometry } from './geometry';
@@ -227,15 +227,27 @@ export class RoomScene {
 			const m = addBox(grp, [(a + b) / 2, gH / 2, zc], [b - a, gH, 2], 0, glass, { cast: false });
 			m.receiveShadow = false;
 		}
-		for (const x of [fr.gx0 + 2.5, fr.bOff, fr.bOff + fr.bW, fr.gx1 - 2.5])
-			addBox(grp, [x, gH / 2, zc], [5, gH, g.tE * 0.5], 0, frame);
+		for (const x of [fr.gx0 + 3.5, fr.bOff, fr.bOff + fr.bW, fr.gx1 - 3.5])
+			addBox(grp, [x, gH / 2, zc], [7, gH, g.tE * 0.5], 0, frame);
 		if (fr.gH <= wallH)
 			addBox(
 				grp,
-				[(fr.gx0 + fr.gx1) / 2, fr.gH - 2.5, zc],
-				[fr.gx1 - fr.gx0, 5, g.tE * 0.5],
+				[(fr.gx0 + fr.gx1) / 2, fr.gH - 3.5, zc],
+				[fr.gx1 - fr.gx0, 7, g.tE * 0.5],
 				0,
 				frame
+			);
+
+		// Radiator on the left wall
+		const r = g.radiator;
+		if (r)
+			addBox(
+				grp,
+				[(r.x0 + r.x1) / 2, r.h / 2, (r.y0 + r.y1) / 2],
+				[r.x1 - r.x0, r.h, r.y1 - r.y0],
+				0,
+				wallMats,
+				{ edges: edgeMat }
 			);
 
 		// Doors: leaf standing fully open, plus swing area on the floor
@@ -352,12 +364,13 @@ export class RoomScene {
 		const ink = color('--wall');
 		const sel = furn.find((f) => f.id === selectedId);
 		this.selected = sel ? { id: sel.id, h: sel.h + this.baseY(sel, furn) } : null;
+		const kit = new MaterialKit();
 		for (const f of furn) {
 			const isSel = selectedId === f.id;
 			const bad = checks[f.id]?.bad;
 			const geo = new THREE.BoxGeometry(f.w, f.h, f.d);
 			const mat = new THREE.MeshStandardMaterial({
-				color: color(PALETTE[f.color % PALETTE.length]),
+				color: new THREE.Color(f.color),
 				roughness: 0.8
 			});
 			if (isSel || bad) {
@@ -374,18 +387,20 @@ export class RoomScene {
 			edges.position.y = f.h / 2;
 			const piece = new THREE.Group();
 			piece.add(mesh, edges);
-			// Real model: shown instead of the box, which stays as an invisible hit area
+			// Real model, or a packet's parts: shown instead of the box, which stays as an invisible
+			// hit area. Packets show parametric stand-ins for parts that are still loading.
 			const info = modelInfo(f);
-			if (info) {
-				const model = modelClone(f.model!);
-				if (model) {
-					model.position.y = info.mount === 'ceiling' ? f.h : 0;
+			if (info || f.parts) {
+				const loading: string[] = [];
+				const model = buildPiece(f, kit, loading);
+				for (const id of loading)
+					loadModel(id).then((ok) => ok && this.last && this.setFurniture(...this.last));
+				if (f.parts || !loading.length) {
+					model.position.y = info?.mount === 'ceiling' ? f.h : 0;
 					piece.add(model);
 					mat.colorWrite = mat.depthWrite = false;
 					mesh.castShadow = mesh.receiveShadow = false;
 					edges.visible = isSel || !!bad;
-				} else {
-					loadModel(f.model!).then((ok) => ok && this.last && this.setFurniture(...this.last));
 				}
 			}
 			// Name only on the selected piece, the room stays calm
@@ -443,6 +458,23 @@ export class RoomScene {
 		this.glowTexture = new THREE.CanvasTexture(c);
 		this.glowTexture.userData.shared = true;
 		return this.glowTexture;
+	}
+
+	/** Floor point (plan cm) under a screen point, or null outside the canvas. */
+	planPoint(clientX: number, clientY: number): Point | null {
+		const r = this.renderer.domElement.getBoundingClientRect();
+		if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null;
+		const ray = new THREE.Raycaster();
+		ray.setFromCamera(
+			new THREE.Vector2(
+				((clientX - r.left) / r.width) * 2 - 1,
+				-((clientY - r.top) / r.height) * 2 + 1
+			),
+			this.camera
+		);
+		const hit = new THREE.Vector3();
+		if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return null;
+		return [hit.x, hit.z];
 	}
 
 	/** Tells the page where to float the selection toolbar (only when it moved). */

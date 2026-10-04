@@ -5,7 +5,7 @@ Plan how to furnish a room, then share the result with friends, who like it or r
 ## Language
 
 **Room**:
-The shape of the space: walls, hallway corner, doors, glass front and loggia. Never includes furniture.
+The shape of the space: walls, hallway corner, doors, glass front, loggia, the radiator and the ceiling lamp. Never includes furniture.
 _Avoid_: layout, config, floor plan
 
 **Inventory**:
@@ -16,12 +16,16 @@ _Avoid_: catalog, furniture list
 One item of the **Inventory**. Its size and color are fixed; a **Design** only decides where it stands and how it is turned.
 _Avoid_: item, object, furniture (as a count noun)
 
+**Packet**:
+A **Piece** made of several things that always stand together, e.g. a desk with its chair and monitor, or an e-piano on its stand with a stool. It moves and turns as one, and its footprint is the box around all its parts.
+_Avoid_: group, set, bundle
+
 **Design**:
 One **Room** plus a placement of every **Piece** of its **Inventory**, with a title. The thing that gets liked, shared and remixed.
 _Avoid_: layout, creation, room layout, arrangement
 
 **Draft**:
-The single **Design** being edited on this device. It lives only on the device.
+The single **Design** being edited on this device. It lives only on the device. It starts empty: **Pieces** wait below the room until they are dragged in, and it can only be published once all of them are placed.
 _Avoid_: work in progress, local layout
 
 **Published Design**:

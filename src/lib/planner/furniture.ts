@@ -1,5 +1,5 @@
 import { modelInfo } from './catalog';
-import type { Geometry } from './geometry';
+import { floorRects, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
 export interface FurnitureCheck {
@@ -72,14 +72,18 @@ export function supportOf(f: Furniture, all: Furniture[]): Furniture | null {
 	for (const o of all) {
 		const m = modelInfo(o);
 		if (o === f || m?.onTop || m?.mount === 'ceiling' || !covers(o, f.cx, f.cy)) continue;
-		if (!best || o.h > best.h) best = o;
+		if (!best || surface(o) > surface(best)) best = o;
 	}
 	return best;
 }
 
+/** Height small items stand on. */
+const surface = (f: Furniture) => f.top ?? f.h;
+
 /** Height (cm) the piece's bottom stands at: 0 on the floor, the support's top otherwise. */
 export function elevation(f: Furniture, all: Furniture[]) {
-	return supportOf(f, all)?.h ?? 0;
+	const support = supportOf(f, all);
+	return support ? surface(support) : 0;
 }
 
 /** Separating axis test; touching (< 0.5 cm overlap) does not count. */
@@ -101,9 +105,26 @@ function overlaps(a: Furniture, b: Furniture) {
 	return true;
 }
 
+/** The radiator as a box, for overlap tests. */
+function radiatorBox(g: Geometry): Furniture | null {
+	const r = g.radiator;
+	if (!r) return null;
+	return {
+		id: 'radiator',
+		name: 'Radiator',
+		w: r.x1 - r.x0,
+		d: r.y1 - r.y0,
+		h: r.h,
+		cx: (r.x0 + r.x1) / 2,
+		cy: (r.y0 + r.y1) / 2,
+		rot: 0,
+		color: 0
+	};
+}
+
 /**
- * Doors blocked and pieces overlapped. Ceiling lamps hang above everything, and a piece
- * standing on another doesn't overlap it.
+ * Doors blocked and pieces (or the radiator) overlapped. Ceiling lamps hang above everything,
+ * and a piece standing on another doesn't overlap it.
  */
 export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): FurnitureCheck {
 	const outside = !insideRoom(f, g);
@@ -134,6 +155,8 @@ export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): Fur
 				overlaps(f, o)
 		)
 		.map((o) => o.name || 'Box');
+	const radiator = radiatorBox(g);
+	if (radiator && !support && overlaps(f, radiator)) overlap.push(radiator.name);
 	return { doors, overlap, outside, bad: outside || doors.length > 0 || overlap.length > 0 };
 }
 
@@ -157,16 +180,6 @@ export function setPosition(f: Furniture, axis: 'x' | 'y', value: number, g: Geo
 	if (axis === 'x') f.cx += value - b.minX;
 	else f.cy += value - b.minY;
 	keepInside(f, g);
-}
-
-/**
- * The floor as one or two rectangles (main part and the strip beside the hallway corner). A
- * box inside the floor always lies within one of them.
- */
-function floorRects(g: Geometry) {
-	const rects = [{ x0: 0, y0: g.hasNotch ? g.N : 0, x1: g.W, y1: g.L }];
-	if (g.hasNotch) rects.push({ x0: g.NW, y0: 0, x1: g.W, y1: g.L });
-	return rects;
 }
 
 /** Whether the piece's bounding box lies within the walls (0.5 cm tolerance). */
@@ -217,9 +230,23 @@ export function moveTo(
 	f.cy = Math.round(cy);
 	if (snap) {
 		const b = bbox(f);
-		const rest = others.filter((o) => o !== f).map(bbox);
-		const xs = [0, g.W, ...(g.hasNotch ? [g.NW] : []), ...rest.flatMap((o) => [o.minX, o.maxX])];
-		const ys = [0, g.L, ...(g.hasNotch ? [g.N] : []), ...rest.flatMap((o) => [o.minY, o.maxY])];
+		const radiator = radiatorBox(g);
+		const rest = [...others.filter((o) => o !== f), ...(radiator ? [radiator] : [])].map(bbox);
+		const bay = g.front.bay ? [g.front.gx0, g.front.gx1] : [];
+		const xs = [
+			0,
+			g.W,
+			...(g.hasNotch ? [g.NW] : []),
+			...bay,
+			...rest.flatMap((o) => [o.minX, o.maxX])
+		];
+		const ys = [
+			0,
+			g.L,
+			...(g.hasNotch ? [g.N] : []),
+			...(g.front.bay ? [g.L - g.front.bay] : []),
+			...rest.flatMap((o) => [o.minY, o.maxY])
+		];
 		f.cx += nearestOffset([b.minX, b.maxX], xs);
 		f.cy += nearestOffset([b.minY, b.maxY], ys);
 	}

@@ -95,7 +95,6 @@ src/
       room.ts             ROOM_ID, the Room, the Inventory, placements, Conflict check
       types.ts            RoomConfig, Furniture
       catalog.ts          furniture types and real 3D models
-      defaults.ts         palette
       geometry.ts         room inputs -> clamped geometry, walls, doors
       furniture.ts        footprint math, Conflict checks (walls, doors, overlaps), moves
       storage.ts          the Draft in localStorage (schema 2, migrates schema 1)

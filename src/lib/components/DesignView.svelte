@@ -75,7 +75,7 @@
 
 	/** Remix replaces the Draft, so warn unless it's still the starting arrangement. */
 	function remix(confirmed = false) {
-		if (!confirmed && !planner.isDefault) {
+		if (!confirmed && !planner.isEmpty) {
 			remixOpen = true;
 			return;
 		}

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { PALETTE } from '#lib/planner/defaults.ts';
-	import { cm, m2 } from '#lib/planner/format.ts';
+	import { modelInfo, partSize } from '#lib/planner/catalog.ts';
+	import { cm, hexColor, isDark, m2 } from '#lib/planner/format.ts';
 	import { bbox, describeCheck, normalizeAngle } from '#lib/planner/furniture.ts';
 	import { buildWalls, segmentPolygon } from '#lib/planner/geometry.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
@@ -87,13 +87,13 @@
 			h(g.NW, g.W, -g.tI - 26);
 			chainH([0, door.x0, door.x1, g.NW], g.N - g.tI - 24);
 			h(0, g.NW, g.N - g.tI - 50);
-			v(g.N, g.L, -g.tI - 26);
-			chainV([0, g.N, g.L], g.W + g.tI + 26);
+			chainV([g.N, g.L - fr.bay, g.L], -g.tI - 26);
+			chainV([0, g.N, g.L - fr.bay, g.L], g.W + g.tI + 26);
 		} else {
 			chainH([0, door.x0, door.x1, g.W], -g.tI - 26);
 			h(0, g.W, -g.tI - 52);
-			v(0, g.L, -g.tI - 26);
-			v(0, g.L, g.W + g.tI + 26);
+			chainV([0, g.L - fr.bay, g.L], -g.tI - 26);
+			chainV([0, g.L - fr.bay, g.L], g.W + g.tI + 26);
 		}
 		v(0, g.L, g.W + g.tI + 54);
 		if (g.D > 0) chainV([g.L, g.L + g.tE, g.L + g.tE + g.D], g.W + g.tI + 26);
@@ -114,11 +114,13 @@
 		const cy = (b.minY + b.maxY) / 2;
 		const wallX = g.hasNotch && cy < g.N ? g.NW : 0;
 		const wallY = g.hasNotch && cx < g.NW ? g.N : 0;
+		// Inside the window bay's width the glass is the wall, elsewhere the wall pieces
+		const endY = cx > g.front.gx0 && cx < g.front.gx1 ? g.L : g.L - g.front.bay;
 		return [
 			{ x1: wallX, y1: cy, x2: b.minX, y2: cy, v: b.minX - wallX },
 			{ x1: b.maxX, y1: cy, x2: g.W, y2: cy, v: g.W - b.maxX },
 			{ x1: cx, y1: wallY, x2: cx, y2: b.minY, v: b.minY - wallY },
-			{ x1: cx, y1: b.maxY, x2: cx, y2: g.L, v: g.L - b.maxY }
+			{ x1: cx, y1: b.maxY, x2: cx, y2: endY, v: endY - b.maxY }
 		].filter((d) => d.v > 0.5);
 	});
 
@@ -152,6 +154,22 @@
 		onanchor?.({ x: top.x - r.left, y: top.y - r.top - 40 });
 	});
 	$effect(() => () => onanchor?.(null));
+
+	/** Plan point (cm) under a screen point, or null outside the view. */
+	export function planPoint(clientX: number, clientY: number): Point | null {
+		const r = wrap?.getBoundingClientRect();
+		if (
+			!svg ||
+			!r ||
+			clientX < r.left ||
+			clientX > r.right ||
+			clientY < r.top ||
+			clientY > r.bottom
+		)
+			return null;
+		const p = new DOMPoint(clientX, clientY).matrixTransform(svg.getScreenCTM()!.inverse());
+		return [p.x, p.y];
+	}
 
 	/* ---------- Dragging ---------- */
 	type Drag =
@@ -297,6 +315,29 @@
 			/>
 		{/each}
 
+		<!-- Radiator on the wall, with its fins -->
+		{#if g.radiator}
+			{@const r = g.radiator}
+			<rect
+				class="leaf"
+				vector-effect="non-scaling-stroke"
+				x={r.x0}
+				y={r.y0}
+				width={r.x1 - r.x0}
+				height={r.y1 - r.y0}
+			>
+				<title>Radiator</title>
+			</rect>
+			<path
+				class="fins"
+				vector-effect="non-scaling-stroke"
+				d={Array.from(
+					{ length: Math.floor((r.y1 - r.y0) / 8) },
+					(_, i) => `M${r.x0 + 3} ${r.y0 + 4 + i * 8}H${r.x1 - 3}`
+				).join('')}
+			/>
+		{/if}
+
 		{#if showDims}
 			<text
 				class="label"
@@ -368,17 +409,46 @@
 				width={f.w}
 				height={f.d}
 				rx={Math.min(6, f.w / 6, f.d / 6)}
-				style:fill="var({PALETTE[f.color % PALETTE.length]})"
+				style:fill={hexColor(f.color)}
 				transform="translate({f.cx} {f.cy}) rotate({f.rot})"
 				ondblclick={() => onopen?.(f.id)}
 				role="presentation"
 			>
 				<title>{[f.name, ...describeCheck(checks[f.id])].join(' · ')}</title>
 			</rect>
+			<!-- A piece standing on a small foot (arc lamp) shows how far its head reaches -->
+			{@const reach = modelInfo(f)?.base ? modelInfo(f) : undefined}
+			{#if reach?.base}
+				<rect
+					class="reach"
+					vector-effect="non-scaling-stroke"
+					x={-reach.base.x - reach.size.w / 2}
+					y={-reach.base.z - reach.size.d / 2}
+					width={reach.size.w}
+					height={reach.size.d}
+					rx="6"
+					transform="translate({f.cx} {f.cy}) rotate({f.rot})"
+				/>
+			{/if}
+			<!-- A packet shows the outlines of its parts -->
+			{#each f.parts ?? [] as p, i (i)}
+				{@const s = partSize(p)}
+				<rect
+					class="part"
+					vector-effect="non-scaling-stroke"
+					x={-s.w / 2}
+					y={-s.d / 2}
+					width={s.w}
+					height={s.d}
+					rx={Math.min(3, s.w / 6, s.d / 6)}
+					transform="translate({f.cx} {f.cy}) rotate({f.rot}) translate({p.at[0]} {p
+						.at[2]}) rotate({p.rot ?? 0})"
+				/>
+			{/each}
 			<!-- The live angle replaces the name while rotating -->
 			{#if label.show && !(live && sel?.id === f.id)}
 				<text
-					class="furn-name"
+					class={['furn-name', isDark(f.color) && 'on-dark']}
 					x={f.cx}
 					y={f.cy + label.nameFs * 0.35}
 					font-size={label.nameFs}
@@ -386,6 +456,14 @@
 				>
 			{/if}
 		{/each}
+		<!-- Fixed ceiling lamp, above the furniture -->
+		{#if g.ceilingLamp}
+			{@const l = g.ceilingLamp}
+			<circle class="ceiling-lamp" vector-effect="non-scaling-stroke" cx={l.x} cy={l.y} r="18">
+				<title>Ceiling lamp</title>
+			</circle>
+			<circle class="ceiling-lamp" vector-effect="non-scaling-stroke" cx={l.x} cy={l.y} r="3" />
+		{/if}
 
 		<!-- Distances of the selected piece to the walls -->
 		{#each distances as d, i (i)}
@@ -478,6 +556,32 @@
 		stroke-width: 1.5;
 		fill: none;
 	}
+	.ceiling-lamp {
+		fill: none;
+		stroke: var(--muted);
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		pointer-events: none;
+	}
+	.fins {
+		stroke: var(--muted);
+		stroke-width: 1;
+	}
+	.reach {
+		fill: none;
+		stroke: #8a8782;
+		stroke-opacity: 0.8;
+		stroke-width: 1;
+		stroke-dasharray: 4 4;
+		pointer-events: none;
+	}
+	.part {
+		fill: none;
+		stroke: #8a8782;
+		stroke-opacity: 0.7;
+		stroke-width: 1;
+		pointer-events: none;
+	}
 	.leaf {
 		fill: var(--sheet);
 		stroke: var(--ink);
@@ -529,10 +633,14 @@
 		stroke: var(--warn);
 		stroke-width: 2;
 	}
+	/* Label color follows the piece's real color, not the theme */
 	.furn-name {
-		fill: var(--ink);
+		fill: #2a2826;
 		font-weight: 600;
 		pointer-events: none;
+	}
+	.furn-name.on-dark {
+		fill: #f4f2ee;
 	}
 	.glow {
 		fill: var(--warn);

@@ -9,13 +9,13 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
-import { furnitureKind, modelInfo } from '../planner/catalog';
+import { furnitureKind, modelInfo, MODELS } from '../planner/catalog';
 import { elevation } from '../planner/furniture';
-import { buildWalls, type Geometry } from '../planner/geometry';
+import { buildWalls, floorRects, type Geometry } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
 import { loadModel, modelClone } from './modelLoader';
-import { buildFurniture, MaterialKit } from './models';
+import { buildPiece, MaterialKit } from './models';
 import type { Shot } from './shots';
 import { dayOfYear, sunDirection, sunLight } from './sun';
 import { WalkControls } from './WalkControls';
@@ -403,10 +403,47 @@ export class PreviewScene {
 			const pane = box(grp, [(a + b) / 2, fr.gH / 2, zc], [b - a, fr.gH, 1.5], 0, glass);
 			pane.castShadow = pane.receiveShadow = false;
 		}
-		for (const x of [fr.gx0 + 3, fr.bOff, fr.bOff + fr.bW, fr.gx1 - 3])
-			box(grp, [x, fr.gH / 2, zc], [6, fr.gH, 8], 0, frame);
-		box(grp, [(fr.gx0 + fr.gx1) / 2, fr.gH - 3, zc], [fr.gx1 - fr.gx0, 6, 8], 0, frame);
-		box(grp, [(fr.gx0 + fr.gx1) / 2, 2, zc], [fr.gx1 - fr.gx0, 4, 8], 0, frame);
+		// 7 cm frames on all sides
+		for (const x of [fr.gx0 + 3.5, fr.bOff, fr.bOff + fr.bW, fr.gx1 - 3.5])
+			box(grp, [x, fr.gH / 2, zc], [7, fr.gH, 8], 0, frame);
+		box(grp, [(fr.gx0 + fr.gx1) / 2, fr.gH - 3.5, zc], [fr.gx1 - fr.gx0, 7, 8], 0, frame);
+		box(grp, [(fr.gx0 + fr.gx1) / 2, 3.5, zc], [fr.gx1 - fr.gx0, 7, 8], 0, frame);
+
+		// Curtains gathered at both ends of a bar above the glass front, which is mounted on the
+		// face of the wall pieces beside it
+		if (g.curtains) {
+			const barY = Math.min(g.H - 6, fr.gH + 10);
+			const wall = g.L - fr.bay;
+			const z = wall - 6;
+			const { x0, x1 } = g.curtains;
+			const bar = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, x1 - x0, 16), steel);
+			bar.rotation.z = Math.PI / 2;
+			bar.position.set((x0 + x1) / 2, barY, z);
+			grp.add(bar);
+			for (const x of [x0 + 4, x1 - 4])
+				box(grp, [x, barY + 1, (z + wall) / 2], [2, 2, 6], 0, steel);
+			const cloth = new THREE.MeshPhysicalMaterial({
+				color: g.curtains.color,
+				roughness: 0.95,
+				sheen: 0.5,
+				sheenRoughness: 0.7,
+				side: THREE.DoubleSide
+			});
+			// Each curtain hangs in deep folds from just under the bar to 1 cm above the floor
+			const cw = 55;
+			const ch = barY - 3;
+			for (const a of [x0, x1 - cw]) {
+				const geo = new THREE.PlaneGeometry(cw, ch, 64, 1);
+				const pos = geo.attributes.position;
+				for (let i = 0; i < pos.count; i++)
+					pos.setZ(i, Math.sin((pos.getX(i) / cw) * Math.PI * 14) * 3.5);
+				geo.computeVertexNormals();
+				const curtain = new THREE.Mesh(geo, cloth);
+				curtain.position.set(a + cw / 2, 1 + ch / 2, z);
+				curtain.castShadow = curtain.receiveShadow = true;
+				grp.add(curtain);
+			}
+		}
 
 		// Loggia: floor, parapet, side walls up to the ceiling
 		if (g.D > 0) {
@@ -422,34 +459,67 @@ export class PreviewScene {
 			);
 		}
 
+		// Radiator on a side wall, its front facing the room; a white box while the model loads
+		const r = g.radiator;
+		if (r) {
+			const [w, d] = [r.y1 - r.y0, r.x1 - r.x0];
+			const center: [number, number, number] = [(r.x0 + r.x1) / 2, r.h / 2, (r.y0 + r.y1) / 2];
+			const model = modelClone('radiator');
+			if (model) {
+				const size = MODELS.radiator.size;
+				model.scale.multiply(new THREE.Vector3(w / size.w, r.h / size.h, d / size.d));
+				model.position.set(center[0], 0, center[2]);
+				model.rotation.y = r.x0 > 0 ? -Math.PI / 2 : Math.PI / 2;
+				grp.add(model);
+			} else {
+				box(grp, center, [d, r.h, w], 0, trim);
+				loadModel('radiator').then((ok) => {
+					if (ok && this.last?.furn === furn) this.build(this.last.g, furn);
+				});
+			}
+		}
+
 		// Furniture: real models where linked (parametric stand-ins while they load), else
 		// parametric models picked by type
 		const kit = new MaterialKit();
 		const lamps: { pos: THREE.Vector3; intensity: number; ceiling: boolean }[] = [];
-		for (const f of furn) {
+		// The fixed ceiling lamp is part of the Room, but lights like any lamp piece
+		const lamp = g.ceilingLamp;
+		const fixtures: Furniture[] = lamp
+			? [
+					{
+						...{ id: 'ceiling-lamp', name: 'Ceiling lamp', kind: 'lamp', model: lamp.model },
+						...{ ...MODELS[lamp.model].size, cx: lamp.x, cy: lamp.y, rot: 0, color: 2 }
+					}
+				]
+			: [];
+		for (const f of [...fixtures, ...furn]) {
 			const info = modelInfo(f);
 			const ceiling = info?.mount === 'ceiling';
-			const model = info && modelClone(f.model!);
-			if (info && !model)
-				loadModel(f.model!).then((ok) => {
+			const loading: string[] = [];
+			const piece = buildPiece(f, kit, loading);
+			for (const id of loading)
+				loadModel(id).then((ok) => {
 					if (ok && this.last?.furn === furn) this.build(this.last.g, furn);
 				});
-			const piece = model ?? buildFurniture(f, kit);
+			const model = info && !loading.length ? piece : null;
 			piece.position.set(f.cx, ceiling ? g.H : elevation(f, furn), f.cy);
 			piece.rotation.y = (-f.rot * Math.PI) / 180;
 			grp.add(piece);
 			if (ceiling) this.roof.push(piece);
-			if (model && info.light?.glow) this.glowParts(model, info.light.glow);
+			if (model && info?.light?.glow) this.glowParts(model, info.light.glow);
 
 			if (furnitureKind(f) !== 'lamp') continue;
 			// The light sits inside the shade, which must not block it
 			piece.traverse((o) => (o.castShadow = false));
 			piece.updateWorldMatrix(true, true);
 			// Bulb: from the model, else just under the top of the stand-in's shade
+			// (cm from the piece's origin; a bare model clone is scaled to meters)
+			const base = model ? info?.base : undefined;
 			const local = info?.light
-				? new THREE.Vector3(...info.light.pos)
+				? new THREE.Vector3(...info.light.pos).sub(new THREE.Vector3(base?.x ?? 0, 0, base?.z ?? 0))
 				: new THREE.Vector3(0, ceiling ? -f.h + 10 : f.h - 10, 0);
-			const bulb = piece.localToWorld(local.divideScalar(model ? 100 : 1));
+			const bulb = piece.localToWorld(local.divideScalar(piece.scale.x));
 			const sphere = new THREE.Mesh(new THREE.SphereGeometry(2.5, 16, 12), this.lampShade);
 			sphere.position.copy(grp.worldToLocal(bulb.clone()));
 			grp.add(sphere);
@@ -765,9 +835,7 @@ export class PreviewScene {
 		const g = this.geo;
 		if (!g) return true;
 		const m = 20;
-		const inMain = x > m && x < g.W - m && y > (g.hasNotch ? g.N : 0) + m && y < g.L - m;
-		const inNotch = g.hasNotch && x > g.NW + m && x < g.W - m && y > m && y < g.L - m;
-		return inMain || inNotch;
+		return floorRects(g).some((r) => x > r.x0 + m && x < r.x1 - m && y > r.y0 + m && y < r.y1 - m);
 	}
 
 	/** Holds a walk key from the on-screen pad. */

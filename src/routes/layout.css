@@ -43,11 +43,6 @@
 	--scene: #f3f0ea;
 	--grid: #efeae2;
 	--grid-strong: #e4ded4;
-	--f1: #d8b48e;
-	--f2: #a3b6c9;
-	--f3: #adc4a4;
-	--f4: #d9a797;
-	--f5: #baabcb;
 	color-scheme: light;
 }
 
@@ -73,11 +68,6 @@
 		--scene: #1c1a17;
 		--grid: #312d28;
 		--grid-strong: #3a362f;
-		--f1: #b8946f;
-		--f2: #8296ab;
-		--f3: #8ca484;
-		--f4: #b88778;
-		--f5: #9a8bab;
 		color-scheme: dark;
 	}
 }

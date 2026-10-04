@@ -1,4 +1,4 @@
-import { INVENTORY, parsePlacements, type Placements } from './room';
+import { INVENTORY, parsePlacements, ROOM_ID, type Placements } from './room';
 import type { Furniture } from './types';
 
 const KEY = 'room-planner-v1';
@@ -57,14 +57,15 @@ export function loadDraft(): Draft {
 		const raw = localStorage.getItem(KEY);
 		if (raw) {
 			const d = JSON.parse(raw);
-			if (d.schema === 2) {
+			// A Draft of an older Room (other Inventory) starts over from the default arrangement
+			if (d.schema === 2 && d.roomId === ROOM_ID) {
 				const remixedFrom = parseRemix(d.remixedFrom);
 				return {
 					placements: parsePlacements(d.placements, true),
 					...(remixedFrom && { remixedFrom })
 				};
 			}
-			return { placements: migrateV1(d.furn) };
+			if (d.schema !== 2) return { placements: migrateV1(d.furn) };
 		}
 	} catch {
 		// Storage blocked or corrupt: start from the default arrangement
@@ -75,7 +76,7 @@ export function loadDraft(): Draft {
 /** Returns false if saving failed (storage blocked or full). */
 export function saveDraft(draft: Draft): boolean {
 	try {
-		localStorage.setItem(KEY, JSON.stringify({ schema: 2, ...draft }));
+		localStorage.setItem(KEY, JSON.stringify({ schema: 2, roomId: ROOM_ID, ...draft }));
 		return true;
 	} catch {
 		return false;
