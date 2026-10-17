@@ -13,3 +13,6 @@ bun.lockb
 
 # Vendored Svelte skills (sveltejs/ai-tools)
 /.claude/skills/
+
+# Agent worktrees (each has its own checkout)
+/.claude/worktrees/
