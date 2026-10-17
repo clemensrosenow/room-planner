@@ -4,7 +4,7 @@
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { designFurniture } from '#lib/planner/room.ts';
 	import { deleteDesign, getDesign } from '#lib/social/api.ts';
-	import { designerName, timeAgo } from '#lib/social/format.ts';
+	import { designerName, duelRecord, shareDescription, timeAgo } from '#lib/social/format.ts';
 	import { designPath } from '#lib/social/slug.ts';
 	import type { DesignData } from '#lib/social/types.ts';
 	import { toast } from '#lib/toast.svelte.ts';
@@ -17,7 +17,7 @@
 	import Icon from './ui/Icon.svelte';
 	import Segmented from './ui/Segmented.svelte';
 
-	/** A Published Design, read-only: 3D or plan, Remix, Share and Delete. */
+	/** A Published Design, read-only: 3D or plan, its Rank and Duel record, Remix, Share and Delete. */
 	let { initial }: { initial: DesignData } = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -30,7 +30,7 @@
 	const furn = designFurniture(initial.placements);
 	const url = $derived(page.url.origin + designPath(design));
 	const view = $derived(page.url.searchParams.get('view') === 'plan' ? 'plan' : '3d');
-	const description = $derived(`by ${designerName(design.designer)} · Furnish Clemens's room`);
+	const description = $derived(shareDescription(design));
 
 	// Right after publishing, offer to share once
 	afterNavigate(() => {
@@ -141,6 +141,23 @@
 				</p>
 			{/if}
 		</div>
+
+		<p class="flex flex-wrap items-center gap-2 text-[13px]">
+			<span
+				class={[
+					'rounded-full px-2.5 py-0.5 font-bold',
+					design.rank === 1 && !design.provisional ? 'bg-accent text-sheet' : 'bg-paper text-ink'
+				]}
+				title="Rank on the Leaderboard">Rank #{design.rank}</span
+			>
+			<span class="font-semibold" title="Duels won–lost · win rate">{duelRecord(design)}</span>
+			{#if design.provisional}
+				<span
+					class="rounded-full px-2.5 py-0.5 text-[12px] font-semibold text-muted ring-1 ring-line"
+					title="Fewer than 5 Duels so far, so this Rank can still move a lot">provisional</span
+				>
+			{/if}
+		</p>
 
 		<div class="flex flex-wrap items-center gap-1.5">
 			<button class="btn" onclick={() => remix()} title="Copy into your design and change it">
