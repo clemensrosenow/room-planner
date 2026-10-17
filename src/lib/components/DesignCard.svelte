@@ -1,12 +1,14 @@
 <script lang="ts">
-	import { designerName, timeAgo } from '#lib/social/format.ts';
+	import { designerName, duelRecord, timeAgo } from '#lib/social/format.ts';
 	import { designPath } from '#lib/social/slug.ts';
 	import type { DesignData } from '#lib/social/types.ts';
 	import PlanThumb from './PlanThumb.svelte';
 	import Icon from './ui/Icon.svelte';
 
-	/** Leaderboard card. The whole card links to the design. */
-	let { design = $bindable(), rank }: { design: DesignData; rank?: number } = $props();
+	/** Leaderboard card with the Design's Rank and Duel record. The whole card links to the design. */
+	let { design }: { design: DesignData } = $props();
+
+	const badge = 'rounded-full px-2.5 py-0.5 text-[12px] font-bold';
 </script>
 
 <article
@@ -14,14 +16,26 @@
 >
 	<div class="relative aspect-[5/6] bg-paper/70 p-4">
 		<PlanThumb placements={design.placements} />
-		{#if rank}
+		<div class="absolute inset-x-3 top-3 flex flex-wrap gap-1.5">
 			<span
 				class={[
-					'absolute top-3 left-3 rounded-full px-2.5 py-0.5 text-[12px] font-bold',
-					rank === 1 ? 'bg-accent text-sheet' : 'bg-sheet text-muted ring-1 ring-line'
-				]}>#{rank}</span
+					badge,
+					design.rank === 1 && !design.provisional
+						? 'bg-accent text-sheet'
+						: 'bg-sheet text-ink ring-1 ring-line'
+				]}
+				title="Rank on the Leaderboard">#{design.rank}</span
 			>
-		{/if}
+			{#if design.provisional}
+				<span
+					class={[badge, 'bg-sheet font-semibold text-muted ring-1 ring-line']}
+					title="Fewer than 5 Duels so far, so this Rank can still move a lot">provisional</span
+				>
+			{/if}
+			{#if design.mine}
+				<span class={[badge, 'ml-auto bg-accent-soft text-accent']}>Yours</span>
+			{/if}
+		</div>
 	</div>
 	<div class="grid gap-2 p-4">
 		<div class="grid gap-0.5">
@@ -36,6 +50,9 @@
 			</p>
 		</div>
 		<div class="flex items-center justify-between gap-2">
+			<span class="text-[13px] font-semibold" title="Duels won–lost · win rate"
+				>{duelRecord(design)}</span
+			>
 			{#if design.remixedFrom}
 				<span
 					class="flex items-center gap-1 text-[12px] font-semibold text-muted"

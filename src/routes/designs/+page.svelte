@@ -61,8 +61,8 @@
 
 		{#if designs.length}
 			<ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-				{#each designs as design, i (design.id)}
-					<li><DesignCard bind:design={designs[i]} rank={sort === 'top' ? i + 1 : undefined} /></li>
+				{#each designs as design (design.id)}
+					<li><DesignCard {design} /></li>
 				{/each}
 			</ul>
 		{:else if !loading && !error}
