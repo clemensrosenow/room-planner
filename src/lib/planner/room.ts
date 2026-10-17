@@ -17,6 +17,7 @@ const SILVER = 0xc7c9cc;
 const NAVY = 0x1c2741;
 const OAK = 0xc4a07a;
 const PALE_OAK = 0xdecfb6;
+const RATTAN = 0x8b5e3c;
 
 /** Room inputs in cm. Origin is the top-left inner corner, y grows towards the loggia. */
 export const ROOM: RoomConfig = {
@@ -45,10 +46,10 @@ export const ROOM: RoomConfig = {
 	ceilingLamp: { model: 'ikea-ps2014-lamp', x: 175, y: 270 },
 	// The bar starts 10 cm onto the left wall piece and ends just short of the right wall
 	curtains: { color: 0x8c8e90, x0: 68 - 10, x1: 355 - 3 },
-	// Oak table with two black metal chairs
+	// White table with two brown woven chairs
 	loggiaSet: {
-		table: { w: 70, d: 70, h: 74, color: OAK },
-		chair: { w: 45, d: 50, h: 80, color: BLACK },
+		table: { w: 80, d: 70, h: 80, color: WHITE },
+		chair: { w: 45, d: 50, h: 80, color: RATTAN },
 		gap: 8
 	}
 };

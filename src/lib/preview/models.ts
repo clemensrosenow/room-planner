@@ -25,6 +25,8 @@ export class MaterialKit {
 	steel = () => this.get('steel', mat.steel);
 	/** Upholstery in a color (sRGB hex) */
 	cloth = (hex: number) => this.get('cloth' + hex, () => mat.fabric(hex));
+	/** Woven rattan in a color (sRGB hex) */
+	wicker = (hex: number) => this.get('wicker' + hex, () => mat.wicker(hex));
 	/** Satin paint in a color (sRGB hex) */
 	lacquer = (hex: number) => this.get('lacquer' + hex, () => mat.lacquer(hex));
 	/** Plain surface in a fixed color (sRGB hex), e.g. black plastic or white powder coat */
@@ -65,7 +67,7 @@ export function buildPiece(f: Furniture, kit: MaterialKit, loading: string[]): T
 
 /**
  * The Room's fixed table and chairs on the loggia, in plan coordinates (x, y → x, z): a matte top
- * on four square legs, and powder-coated chairs with a slatted seat and backrest.
+ * on four square legs, and chairs with a woven seat and backrest on a frame of their color.
  */
 export function buildLoggiaSet(items: LoggiaItem[], kit: MaterialKit): THREE.Group {
 	const set = new THREE.Group();
@@ -76,34 +78,47 @@ export function buildLoggiaSet(items: LoggiaItem[], kit: MaterialKit): THREE.Gro
 			[sw, sh, sd]: [number, number, number],
 			[x, y0, z]: [number, number, number]
 		) => {
-			const m = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), material);
+			const geo = new THREE.BoxGeometry(sw, sh, sd);
+			// UVs in cm, as textured materials expect: faces are ±x, ±y, ±z, four vertices each
+			const uv = geo.attributes.uv;
+			const faces = [
+				[sd, sh],
+				[sd, sh],
+				[sw, sd],
+				[sw, sd],
+				[sw, sh],
+				[sw, sh]
+			];
+			for (let i = 0; i < uv.count; i++) {
+				const [u, v] = faces[Math.floor(i / 4)];
+				uv.setXY(i, uv.getX(i) * u, uv.getY(i) * v);
+			}
+			const m = new THREE.Mesh(geo, material);
 			m.position.set(x, y0 + sh / 2, z);
 			m.castShadow = m.receiveShadow = true;
 			g.add(m);
 		};
 		const { w, d, h } = it;
 		if (it.kind === 'table') {
-			const wood = kit.plain(it.color, 0.6);
-			add(wood, [w, 3, d], [0, h - 3, 0]);
-			add(wood, [w - 10, 6, d - 10], [0, h - 9, 0]);
+			const top = kit.plain(it.color, 0.6);
+			add(top, [w, 3, d], [0, h - 3, 0]);
+			add(top, [w - 10, 6, d - 10], [0, h - 9, 0]);
 			for (const sx of [-1, 1])
-				for (const sz of [-1, 1]) add(wood, [5, h - 3, 5], [sx * (w / 2 - 5), 0, sz * (d / 2 - 5)]);
+				for (const sz of [-1, 1]) add(top, [5, h - 3, 5], [sx * (w / 2 - 5), 0, sz * (d / 2 - 5)]);
 		} else {
 			// Front at +z: front legs up to the seat, back legs running on as the backrest's posts
-			const metal = kit.plain(it.color, 0.45, 0.4);
+			const frame = kit.plain(it.color, 0.6);
+			const woven = kit.wicker(it.color);
 			const seatH = Math.min(45, h * 0.56);
-			const leg = 2.5;
+			const leg = 3;
 			const [lx, fz, bz] = [w / 2 - leg / 2, d / 2 - leg / 2 - 2, -d / 2 + leg / 2];
 			for (const sx of [-1, 1]) {
-				add(metal, [leg, seatH, leg], [sx * lx, 0, fz]);
-				add(metal, [leg, h, leg], [sx * lx, 0, bz]);
-				add(metal, [leg, 3, d - leg - 2], [sx * lx, seatH - 3, -1]);
+				add(frame, [leg, seatH - 5, leg], [sx * lx, 0, fz]);
+				add(frame, [leg, h, leg], [sx * lx, 0, bz]);
 			}
-			const slats = 5;
-			const sd = (d - leg - 2) / slats;
-			for (let i = 0; i < slats; i++)
-				add(metal, [w - leg, 1.5, sd - 1.2], [0, seatH, bz + leg / 2 + sd * (i + 0.5)]);
-			for (const y of [h - 8, h - 18, h - 28]) add(metal, [w - leg, 6, 1.5], [0, y, bz]);
+			add(woven, [w, 5, d - 2], [0, seatH - 5, -1]);
+			add(woven, [w - 2 * leg, h - seatH - 6, 3], [0, seatH + 2, bz]);
+			add(frame, [w, 3, leg], [0, h - 3, bz]);
 		}
 		g.position.set(it.cx, 0, it.cy);
 		g.rotation.y = (-it.rot * Math.PI) / 180;
