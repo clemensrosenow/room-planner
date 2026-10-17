@@ -92,6 +92,21 @@ describe('standings', () => {
 		expect(s.get('aaaaaaaa')!.rank).toBe(3);
 	});
 
+	it('strengths that differ only by noise count as equal: newer first', () => {
+		const s = standings(
+			designs,
+			[],
+			new Map([
+				['aaaaaaaa', 1.3 * (1 + 1e-12)],
+				['bbbbbbbb', 1.3],
+				['cccccccc', 1.3 * (1 - 1e-12)]
+			])
+		);
+		expect(s.get('cccccccc')!.rank).toBe(1);
+		expect(s.get('bbbbbbbb')!.rank).toBe(2);
+		expect(s.get('aaaaaaaa')!.rank).toBe(3);
+	});
+
 	it('equal strength and publish time falls back to the id', () => {
 		const twins = [
 			{ id: 'yyyyyyyy', createdAt: at(5) },

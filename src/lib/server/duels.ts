@@ -48,10 +48,11 @@ export function parseCastDuel(body: unknown): CastDuelRequest {
 }
 
 /**
- * Stores one Device's judgement of a pair: `winner` is `a`, `b`, or null for a Skip.
+ * Stores one Device's judgement of a pair. `winner` is a Design id, the same string as `a` or `b`
+ * (not the letters "a" / "b"), or null for a Skip; it is stored as `winner_id`.
  * Contract in docs/specs/duels.md, R2:
- * - 400 when `a === b`, an id isn't a valid Design id (isDesignId), or `winner` is neither `a`,
- *   `b` nor null.
+ * - 400 when `a === b`, an id isn't a valid Design id (isDesignId), or `winner` is neither the
+ *   id in `a`, the id in `b`, nor null.
  * - 404 when a Design doesn't exist, also when it is deleted between the check and the insert:
  *   the insert then fails with a foreign key violation, `23503` (pgCode in designs.ts).
  * - 403 when the voter published either Design (`publisherHash === voterHash`).

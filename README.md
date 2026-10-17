@@ -63,14 +63,14 @@ After changing `src/lib/server/schema.ts`, run `npm run db:generate` to add a mi
 
 All JSON; every call sends the header `X-Device-Id` (the server stores only its sha256).
 
-| Method & path                    | Does                                                                        | Errors             |
-| -------------------------------- | --------------------------------------------------------------------------- | ------------------ |
-| `GET /api/designs?sort=top\|new` | Every Design of the Room → `{ designs }`; Top by rank, New newest first     |                    |
-| `GET /api/designs/:id`           | One Design                                                                  | 404                |
-| `POST /api/designs`              | Publish `{ title, designer?, placements, remixedFromId? }` → `{ id, slug }` | 400, 422 conflicts |
-| `DELETE /api/designs/:id`        | Only by the Device that published it (its Duels go with it)                 | 403, 404           |
-| `GET /api/duel`                  | Next pair for this Device → `{ pair: [Design, Design] \| null }`            | 400 no Device      |
-| `POST /api/duels`                | Judge a pair `{ a, b, winner }` (winner `a`, `b` or null = Skip) → 201      | 400, 403, 404, 409 |
+| Method & path                    | Does                                                                                               | Errors             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------ |
+| `GET /api/designs?sort=top\|new` | Every Design of the Room → `{ designs }`; Top by rank, New newest first                            |                    |
+| `GET /api/designs/:id`           | One Design                                                                                         | 404                |
+| `POST /api/designs`              | Publish `{ title, designer?, placements, remixedFromId? }` → `{ id, slug }`                        | 400, 422 conflicts |
+| `DELETE /api/designs/:id`        | Only by the Device that published it (its Duels go with it)                                        | 403, 404           |
+| `GET /api/duel`                  | Next pair for this Device → `{ pair: [Design, Design] \| null }`                                   | 400 no Device      |
+| `POST /api/duels`                | Judge a pair `{ a, b, winner }` of Design ids; `winner` is the id in `a` or `b`, null = Skip → 201 | 400, 403, 404, 409 |
 
 Every Design comes with `mine` (this Device published it) and its standing: `rank` (1-based, by Bradley-Terry strength over all Duels; equal strength → newer first, then id), `wins` and `losses` (decided Duels only, no Skips) and `provisional` (fewer than 5 of them).
 

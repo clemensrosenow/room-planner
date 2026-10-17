@@ -16,6 +16,14 @@ export const decided = (duels: StoredDuel[]): DuelResult[] =>
 	);
 
 /**
+ * Stronger first. `rank` converges to a relative change < 1e-9, so strengths closer than that are
+ * equal: two identical records must not be ordered by floating-point noise.
+ */
+const STRENGTH_TOLERANCE = 1e-9;
+const byStrength = (sa: number, sb: number) =>
+	Math.abs(Math.log(sa) - Math.log(sb)) < STRENGTH_TOLERANCE ? 0 : sb - sa;
+
+/**
  * Where every Design stands (docs/specs/duels.md, R3), given the strengths from `rank`.
  * Wins and losses count only real decided Duels between known Designs; the prior never counts.
  * Rank is 1-based by strength; equal strength → newer first, then id.
@@ -36,7 +44,7 @@ export function standings(
 	const s = (id: string) => strength.get(id) ?? 1;
 	const order = [...designs].sort(
 		(a, b) =>
-			s(b.id) - s(a.id) ||
+			byStrength(s(a.id), s(b.id)) ||
 			b.createdAt.getTime() - a.createdAt.getTime() ||
 			(a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 	);
