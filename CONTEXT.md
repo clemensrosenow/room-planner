@@ -1,11 +1,11 @@
 # Room Planner
 
-Plan how to furnish a room, then share the result with friends, who like it or remix it.
+Plan how to furnish a room, then share the result with friends, who compare it in Duels or remix it.
 
 ## Language
 
 **Room**:
-The shape of the space: walls, hallway corner, doors, glass front, loggia, the radiator and the ceiling lamp. Never includes furniture.
+The shape of the space: walls, hallway corner, doors, glass front, loggia, plus its **Fixtures**. Never includes **Pieces**.
 _Avoid_: layout, config, floor plan
 
 **Inventory**:
@@ -21,7 +21,7 @@ A **Piece** made of several things that always stand together, e.g. a desk with 
 _Avoid_: group, set, bundle
 
 **Design**:
-One **Room** plus a placement of every **Piece** of its **Inventory**, with a title. The thing that gets liked, shared and remixed.
+One **Room** plus a placement of every **Piece** of its **Inventory**, with a title. The thing that gets compared in **Duels**, shared and remixed.
 _Avoid_: layout, creation, room layout, arrangement
 
 **Draft**:
@@ -40,20 +40,28 @@ _Avoid_: error, issue, collision
 Copying a **Published Design** into the **Draft** so it can be changed. It replaces the current **Draft** after a warning.
 _Avoid_: fork, copy
 
-**Like**:
-One device's vote for a **Published Design**. Each device can like a given **Published Design** at most once.
-_Avoid_: vote, upvote, heart
+**Fixture**:
+Something that belongs to the **Room** and never moves: the radiator, the ceiling lamp, the curtains, the loggia table and its two chairs. It is shown in every view but can't be selected, isn't part of a **Design**, and only the radiator can cause a **Conflict**.
+_Avoid_: decoration, static furniture
+
+**Duel**:
+One **Device**'s judgement between two **Published Designs**: "Where would you rather live?". The result is a winner or a Skip. Each **Device** judges a given pair at most once and can't change it, and never gets its own **Published Designs**.
+_Avoid_: vote, match, battle, comparison
+
+**Rank**:
+A **Published Design**'s position on the **Leaderboard**, from a Bradley-Terry fit over all **Duels** of its **Room**. With fewer than 5 decided **Duels** it is provisional.
+_Avoid_: score, rating, Elo
 
 **Designer**:
 The display name attached to a **Published Design**, picked at publish time. It is a label, not an account.
 _Avoid_: author, user, owner
 
 **Device**:
-One browser that has used the app. It is the only notion of identity: it publishes, likes and deletes. Clearing the browser's storage makes it a new **Device**.
+One browser that has used the app. It is the only notion of identity: it publishes, judges **Duels** and deletes. Clearing the browser's storage makes it a new **Device**.
 _Avoid_: user, account, session
 
 **Leaderboard**:
-The list of **Published Designs** for a **Room**, ordered by **Likes** (Top) or by publish time (New).
+The list of **Published Designs** for a **Room**, ordered by **Rank** (Top) or by publish time (New).
 _Avoid_: gallery, feed, ranking
 
 ## Relationships
@@ -62,7 +70,7 @@ _Avoid_: gallery, feed, ranking
 - A **Room** has exactly one **Inventory**. Changing the **Room** or its **Inventory** makes a new **Room** with its own **Leaderboard**.
 - A **Device** has exactly one **Draft**.
 - A **Published Design** comes from a **Draft** with no **Conflicts**, and may record the **Published Design** it was remixed from (direct parent only).
-- A **Device** can delete the **Published Designs** it published, and their **Likes** go with them. A **Device** cannot **Like** its own.
+- A **Device** can delete the **Published Designs** it published, and their **Duels** go with them.
 - Viewing a **Published Design** never changes the **Draft**. Only a **Remix** does.
 - A **Leaderboard** belongs to one **Room**.
 
