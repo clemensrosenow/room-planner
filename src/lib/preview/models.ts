@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { furnitureKind, modelInfo, partSize } from '../planner/catalog';
+import type { LoggiaItem } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
 import { modelClone } from './modelLoader';
@@ -60,6 +61,55 @@ export function buildPiece(f: Furniture, kit: MaterialKit, loading: string[]): T
 		g.add(obj);
 	}
 	return g;
+}
+
+/**
+ * The Room's fixed table and chairs on the loggia, in plan coordinates (x, y → x, z): a matte top
+ * on four square legs, and powder-coated chairs with a slatted seat and backrest.
+ */
+export function buildLoggiaSet(items: LoggiaItem[], kit: MaterialKit): THREE.Group {
+	const set = new THREE.Group();
+	for (const it of items) {
+		const g = new THREE.Group();
+		const add = (
+			material: THREE.Material,
+			[sw, sh, sd]: [number, number, number],
+			[x, y0, z]: [number, number, number]
+		) => {
+			const m = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), material);
+			m.position.set(x, y0 + sh / 2, z);
+			m.castShadow = m.receiveShadow = true;
+			g.add(m);
+		};
+		const { w, d, h } = it;
+		if (it.kind === 'table') {
+			const wood = kit.plain(it.color, 0.6);
+			add(wood, [w, 3, d], [0, h - 3, 0]);
+			add(wood, [w - 10, 6, d - 10], [0, h - 9, 0]);
+			for (const sx of [-1, 1])
+				for (const sz of [-1, 1]) add(wood, [5, h - 3, 5], [sx * (w / 2 - 5), 0, sz * (d / 2 - 5)]);
+		} else {
+			// Front at +z: front legs up to the seat, back legs running on as the backrest's posts
+			const metal = kit.plain(it.color, 0.45, 0.4);
+			const seatH = Math.min(45, h * 0.56);
+			const leg = 2.5;
+			const [lx, fz, bz] = [w / 2 - leg / 2, d / 2 - leg / 2 - 2, -d / 2 + leg / 2];
+			for (const sx of [-1, 1]) {
+				add(metal, [leg, seatH, leg], [sx * lx, 0, fz]);
+				add(metal, [leg, h, leg], [sx * lx, 0, bz]);
+				add(metal, [leg, 3, d - leg - 2], [sx * lx, seatH - 3, -1]);
+			}
+			const slats = 5;
+			const sd = (d - leg - 2) / slats;
+			for (let i = 0; i < slats; i++)
+				add(metal, [w - leg, 1.5, sd - 1.2], [0, seatH, bz + leg / 2 + sd * (i + 0.5)]);
+			for (const y of [h - 8, h - 18, h - 28]) add(metal, [w - leg, 6, 1.5], [0, y, bz]);
+		}
+		g.position.set(it.cx, 0, it.cy);
+		g.rotation.y = (-it.rot * Math.PI) / 180;
+		set.add(g);
+	}
+	return set;
 }
 
 /** A model with a small footprint is moved so its footprint is centered on the piece. */

@@ -256,9 +256,35 @@
 			<rect class="wall" x={-g.tI} y={loggiaY + g.D} width={g.W + 2 * g.tI} height="15" />
 			<rect class="wall" x={-g.tI} y={loggiaY} width={g.tI} height={g.D} />
 			<rect class="wall" x={g.W} y={loggiaY} width={g.tI} height={g.D} />
+			<!-- Fixed table and chairs, quiet like the radiator; a chair's backrest is a line -->
+			{#each g.loggiaSet as it, i (i)}
+				<g transform="translate({it.cx} {it.cy}) rotate({it.rot})">
+					<rect
+						class="leaf"
+						vector-effect="non-scaling-stroke"
+						x={-it.w / 2}
+						y={-it.d / 2}
+						width={it.w}
+						height={it.d}
+						rx={it.kind === 'chair' ? 4 : 2}
+					>
+						<title>{it.name}</title>
+					</rect>
+					{#if it.kind === 'chair'}
+						<line
+							class="fins"
+							vector-effect="non-scaling-stroke"
+							x1={-it.w / 2 + 3}
+							x2={it.w / 2 - 3}
+							y1={-it.d / 2 + 5}
+							y2={-it.d / 2 + 5}
+						/>
+					{/if}
+				</g>
+			{/each}
 			{#if showDims}
 				<text
-					class="label"
+					class="label on-loggia"
 					x={g.W / 2}
 					y={loggiaY + g.D / 2 + fs * 1.1}
 					font-size={fs * 1.05}
@@ -618,6 +644,13 @@
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		opacity: 0.8;
+	}
+	/* Stays readable over the loggia's table and chairs */
+	.on-loggia {
+		paint-order: stroke;
+		stroke: var(--loggia);
+		stroke-width: 5px;
+		stroke-linejoin: round;
 	}
 	.furn {
 		stroke: color-mix(in srgb, var(--ink) 25%, transparent);

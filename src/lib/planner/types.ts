@@ -38,6 +38,15 @@ export interface RoomConfig {
 	 * mounted on the front wall pieces
 	 */
 	curtains?: { color: number; x0: number; x1: number };
+	/**
+	 * Table and two chairs on the loggia that never move (sRGB hex colors): the table centered on
+	 * it, a chair on its left and right facing it, `gap` cm between the table and each seat's front
+	 */
+	loggiaSet?: {
+		table: { w: number; d: number; h: number; color: number };
+		chair: { w: number; d: number; h: number; color: number };
+		gap: number;
+	};
 }
 
 export interface Furniture {
