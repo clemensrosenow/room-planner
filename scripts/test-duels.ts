@@ -1,10 +1,11 @@
 /**
  * Checks Duels and the Leaderboard against a running dev server (`npm run dev`), per
- * docs/specs/duels.md R3. Run: npm run test:duels (BASE_URL defaults to http://localhost:5174).
+ * docs/specs/duels.md R3. Run: DUELS_TEST_DEV_DB=1 npm run test:duels (BASE_URL defaults to
+ * http://localhost:5174).
  *
  * It WRITES DATA: it publishes test Designs from three Devices, casts Duels on them and deletes
  * everything at the end (Duels go with their Designs). Only run it against a dev server whose
- * DATABASE_URL is the Neon `dev` branch, never production. It only ever votes on its own test
+ * DATABASE_URL is the Neon `dev` branch, never production; DUELS_TEST_DEV_DB=1 confirms that. It only ever votes on its own test
  * Designs, so nothing it does touches anyone else's standings.
  */
 import { conflictIds, designFurniture, type Placements } from '../src/lib/planner/room';
@@ -95,6 +96,7 @@ function requireEndpoint(r: Reply, endpoint: string, where: string) {
 
 const publisher = (i: number) => `test-${RUN}-publisher-${i}`;
 const voter = (i: number) => `test-${RUN}-voter-${i}`;
+const racer = (i: number) => `test-${RUN}-racer-${i}`;
 const created: { id: string; device: string }[] = [];
 /** Decided Duels that got a 201, for the expected W–L. */
 const decided: { winner: string; loser: string }[] = [];
@@ -155,6 +157,10 @@ function checkStandings(rows: Row[], designs: string[], label: string) {
 }
 
 try {
+	if (process.env.DUELS_TEST_DEV_DB !== '1')
+		throw new Stop(
+			'This script writes to the database behind the dev server. Run it only when that server uses the Neon `dev` branch (never production), and confirm with: DUELS_TEST_DEV_DB=1 npm run test:duels'
+		);
 	if (!/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(BASE))
 		throw new Stop(
 			`BASE_URL ${BASE} isn't a local dev server. This script writes data; run it only against npm run dev on the Neon dev branch.`
@@ -191,7 +197,11 @@ try {
 		'GET /api/duel',
 		'src/routes/api/duel/+server.ts (nextPair: src/lib/duels/next-pair.ts)'
 	);
-	check(r.status === 200 && r.json && 'pair' in r.body, 'GET /api/duel → 200 { pair }', r);
+	check(
+		r.status === 200 && r.body && typeof r.body === 'object' && 'pair' in r.body,
+		'GET /api/duel → 200 { pair }',
+		r
+	);
 	const pairOk = (pair: unknown) =>
 		pair === null ||
 		(Array.isArray(pair) &&
@@ -209,7 +219,11 @@ try {
 			check(false, 'GET /api/duel never offers a Device its own Design (spec R2 nextPair)', ids);
 			break;
 		}
-		if (i === 9) check(true, 'GET /api/duel never offers a Device its own Design (10 tries)');
+		if (i === 9)
+			check(
+				true,
+				'GET /api/duel never offers a Device its own Design (10 tries; passes vacuously while nextPair is the stub)'
+			);
 	}
 	r = await call('GET', '/api/duel', null);
 	check(r.status === 400, 'GET /api/duel without X-Device-Id → 400', r.status);
@@ -251,15 +265,25 @@ try {
 	r = await call('POST', '/api/duels', null, { a: d0, b: d1, winner: d0 });
 	check(r.status === 400, 'no X-Device-Id → 400', r.status);
 
-	// Two votes on the same pair at the same moment (once in each order): the primary key lets
-	// exactly one in. Same winner, so the expected W–L doesn't depend on which one wins.
-	const race = await Promise.all([vote(voter(1), d2, d3, d2), vote(voter(1), d3, d2, d2)]);
-	const statuses = race.map((x) => x.status).sort();
-	check(
-		statuses[0] === 201 && statuses[1] === 409,
-		'two concurrent votes on one pair → one 201, one 409',
-		statuses
-	);
+	// Two votes on the same pair at the same moment (once in each order), from one Device: the
+	// primary key lets exactly one in. Four independent races, each from its own Device, so one
+	// lucky timing can't hide a missing check. Same winner in both requests, so the expected W–L
+	// doesn't depend on which one wins.
+	const races: [string, string, string][] = [
+		[d2, d3, d2],
+		[d1, d2, d1],
+		[d0, d1, d0],
+		[d1, d3, d1]
+	];
+	for (const [k, [a, b, winner]] of races.entries()) {
+		const race = await Promise.all([vote(racer(k), a, b, winner), vote(racer(k), b, a, winner)]);
+		const statuses = race.map((x) => x.status).sort();
+		check(
+			statuses[0] === 201 && statuses[1] === 409,
+			`race ${k + 1}: two concurrent votes on one pair from one Device → one 201, one 409`,
+			statuses
+		);
+	}
 
 	// A Skip is stored: it can't be cast again, and the pair never comes back
 	r = await vote(voter(0), d1, d2, null);
@@ -294,7 +318,7 @@ try {
 	}
 	check(
 		!repeated,
-		'GET /api/duel never returns a pair the Device judged or skipped (15 tries)',
+		'GET /api/duel never returns a pair the Device judged or skipped (15 tries; passes vacuously while nextPair is the stub, or when other dev Designs fill every pair)',
 		repeated
 	);
 
@@ -303,7 +327,7 @@ try {
 	checkStandings(top, [d0, d1, d2, d3], 'Top');
 	const pos = (id: string) => top.findIndex((d) => d.id === id);
 	check(
-		pos(d0) < pos(d1) && pos(d1) < pos(d3) && pos(d2) < pos(d3),
+		pos(d0) < pos(d1) && pos(d0) < pos(d2) && pos(d1) < pos(d3) && pos(d2) < pos(d3),
 		'Top: d0 (won all) above d1 and d2, d3 (lost all) below them'
 	);
 	const fresh = await leaderboard('new');
@@ -312,14 +336,21 @@ try {
 		'New: newest first'
 	);
 	check(
-		fresh.every((d) => typeof d.rank === 'number' && typeof d.provisional === 'boolean'),
+		fresh.every(
+			(d) =>
+				typeof d.rank === 'number' &&
+				typeof d.wins === 'number' &&
+				typeof d.losses === 'number' &&
+				typeof d.provisional === 'boolean'
+		),
 		'New: every Design has rank, wins, losses, provisional too'
 	);
 
 	/* ---------- Deleting a Design removes its Duels ---------- */
 	r = await call('DELETE', `/api/designs/${d3}`, publisher(2));
 	check(r.status === 200, 'deleting d3 → 200', r.status);
-	created.splice(3, 1);
+	// Only forget d3 once it is really gone, so the cleanup below still deletes it otherwise
+	if (r.status === 200) created.splice(3, 1);
 	decided.splice(0, decided.length, ...decided.filter((x) => x.winner !== d3 && x.loser !== d3));
 	top = await leaderboard('top');
 	check(!top.some((d) => d.id === d3), 'Top: d3 is gone');

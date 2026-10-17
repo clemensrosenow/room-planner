@@ -64,8 +64,42 @@ const anyAllowed = (candidates: DuelCandidate[], seen: Set<string>) =>
 		([a, b]) => !seen.has(pairKey(a, b))
 	);
 
+/** Brute force: the Designs `c` may meet (not mine, not itself, pair not seen). */
+const partnersOf = (c: DuelCandidate, candidates: DuelCandidate[], seen: Set<string>) =>
+	candidates.filter((p) => !p.mine && p.id !== c.id && !seen.has(pairKey(c.id, p.id)));
+
+const lnGap = (a: DuelCandidate, b: DuelCandidate) =>
+	Math.abs(Math.log(a.strength) - Math.log(b.strength));
+
+/**
+ * Brute force for the two picking rules: in one of its two orders (first, partner), `first` has
+ * the fewest Duels among Designs that still have an allowed partner, and `partner` is the
+ * closest in ln(strength) among first's allowed partners.
+ */
+function followsPickingRules(
+	pair: [string, string],
+	candidates: DuelCandidate[],
+	seen: Set<string>
+): boolean {
+	const byId = new Map(candidates.map((c) => [c.id, c]));
+	const open = candidates.filter((c) => !c.mine && partnersOf(c, candidates, seen).length);
+	const fewest = Math.min(...open.map((c) => c.duels));
+	const fits = (first: DuelCandidate, partner: DuelCandidate) => {
+		const partners = partnersOf(first, candidates, seen);
+		const closest = Math.min(...partners.map((p) => lnGap(first, p)));
+		return (
+			open.includes(first) &&
+			first.duels === fewest &&
+			partners.includes(partner) &&
+			lnGap(first, partner) <= closest + 1e-12
+		);
+	};
+	const [a, b] = pair.map((id) => byId.get(id)!);
+	return fits(a, b) || fits(b, a);
+}
+
 describe('nextPair: what may never be returned', () => {
-	it('never returns its own Design, a seen pair or the same Design twice (random setups)', () => {
+	it('never returns its own Design, a seen pair or the same Design twice, and follows the picking rules (random setups)', () => {
 		let pairs = 0;
 		for (const seed of SEEDS) {
 			const random = seeded(seed * 7919);
@@ -111,6 +145,10 @@ describe('nextPair: what may never be returned', () => {
 				seen.has(pairKey(a, b)),
 				`Spec R2: never a pair in \`seen\`; got ${pair}. Setup: ${setup}`
 			).toBe(false);
+			expect(
+				followsPickingRules(pair!, candidates, seen),
+				`Spec R2: one Design of ${pair} must have the fewest \`duels\` among Designs that still have an allowed partner, and the other must be its allowed partner with the closest strength (smallest |ln s(a) − ln s(b)|). Setup: ${setup}`
+			).toBe(true);
 		}
 		expect(pairs, 'The random setups should contain some judgeable pairs.').toBeGreaterThan(50);
 	});
@@ -195,6 +233,18 @@ describe('nextPair: the first Design has the fewest Duels', () => {
 });
 
 describe('nextPair: the second Design has the closest strength', () => {
+	it('picks the partner by strength, not by how few Duels it has', () => {
+		const candidates = [
+			design('first', { duels: 0, strength: 1 }),
+			design('close', { duels: 9, strength: 1.05 }),
+			design('idle', { duels: 1, strength: 5 })
+		];
+		expect(
+			pairsReturned(candidates, seenOf()),
+			'Spec R2: only the *first* Design is chosen by fewest `duels`. Its partner is the closest in strength (`close`, ×1.05), even though `idle` has fewer Duels.'
+		).toEqual(new Set([pairKey('first', 'close')]));
+	});
+
 	it('picks the partner closest in ln(strength), not in plain strength', () => {
 		const candidates = [
 			design('first', { duels: 0, strength: 1 }),

@@ -22,7 +22,7 @@ npm run db:migrate   # apply migrations to the database in DATABASE_URL
 
 Node 24 everywhere: `engines.node` in `package.json` sets it for npm (`engine-strict`), CI and Vercel. Change it only there.
 
-`npm run test:leaderboard` publishes and deletes real Designs through a running dev server: it **writes data**. Only run it against the Neon `dev` branch, and only when asked.
+`DUELS_TEST_DEV_DB=1 npm run test:duels` publishes and deletes real Designs and Duels through a running dev server: it **writes data**. Only run it against the Neon `dev` branch, and only when asked.
 
 CI (`.github/workflows/ci.yml`, job `ci`) runs check, lint, test and build on every PR. A Stop hook in `.claude/settings.json` runs `npm run check && npm test` before you finish and sends you back if they fail.
 
