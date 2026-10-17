@@ -15,7 +15,7 @@ import { buildWalls, floorRects, type Geometry } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
 import { loadModel, modelClone } from './modelLoader';
-import { buildPiece, MaterialKit } from './models';
+import { buildLoggiaSet, buildPiece, MaterialKit } from './models';
 import type { Shot } from './shots';
 import { dayOfYear, sunDirection, sunLight } from './sun';
 import { WalkControls } from './WalkControls';
@@ -457,6 +457,8 @@ export class PreviewScene {
 			this.roof.push(
 				box(grp, [g.W / 2, g.H + 10, ly0 + g.D / 2], [g.W + 2 * g.tI, 20, g.D], 0, wallMat)
 			);
+			// The owner's table and chairs, which never move
+			grp.add(buildLoggiaSet(g.loggiaSet, new MaterialKit()));
 		}
 
 		// Radiator on a side wall, its front facing the room; a white box while the model loads

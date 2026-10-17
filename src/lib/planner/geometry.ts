@@ -23,6 +23,22 @@ export interface Door {
 	openEnd: Point;
 }
 
+/**
+ * A fixed piece of furniture on the loggia, part of the Room and never a Piece: center and box in
+ * cm, rotation in degrees clockwise in plan view (0 = front towards +y)
+ */
+export interface LoggiaItem {
+	kind: 'table' | 'chair';
+	name: string;
+	cx: number;
+	cy: number;
+	w: number;
+	d: number;
+	h: number;
+	rot: number;
+	color: number;
+}
+
 export interface Geometry {
 	W: number;
 	L: number;
@@ -57,6 +73,8 @@ export interface Geometry {
 	/** Fixed ceiling lamp: model id and plan position */
 	ceilingLamp: { model: string; x: number; y: number } | null;
 	curtains: { color: number; x0: number; x1: number } | null;
+	/** Table and chairs on the loggia; empty without a loggia */
+	loggiaSet: LoggiaItem[];
 	area: number;
 	loggiaArea: number;
 	/** Human-readable problems with the inputs (values were clamped) */
@@ -119,6 +137,22 @@ export function computeGeometry(c: RoomConfig): Geometry {
 		const d = clamp(c.radiator.d, 2, 60);
 		const x0 = c.radiator.wall === 'right' ? W - d : 0;
 		radiator = { x0, x1: x0 + d, y0: y1 - w, y1, h: clamp(c.radiator.h, 10, H) };
+	}
+	const loggiaSet: LoggiaItem[] = [];
+	if (c.loggiaSet && D > 0) {
+		const msg = 'Loggia table and chairs do not fit on the loggia.';
+		const t = c.loggiaSet.table;
+		const ch = c.loggiaSet.chair;
+		const table = { ...t, d: clamp(t.d, 10, D, msg) };
+		const chair = { ...ch, w: clamp(ch.w, 10, D, msg) };
+		const off = clamp(table.w / 2 + c.loggiaSet.gap + chair.d / 2, 0, (W - chair.d) / 2, msg);
+		const [cx, cy] = [W / 2, L + tE + D / 2];
+		// The chairs' fronts face the table: the left one turned to +x, the right one to -x
+		loggiaSet.push(
+			{ kind: 'table', name: 'Loggia table', cx, cy, rot: 0, ...table },
+			{ kind: 'chair', name: 'Loggia chair', cx: cx - off, cy, rot: 270, ...chair },
+			{ kind: 'chair', name: 'Loggia chair', cx: cx + off, cy, rot: 90, ...chair }
+		);
 	}
 
 	// Floor outline; with a window bay the glass front sits `bay` deeper than the wall pieces
@@ -188,6 +222,7 @@ export function computeGeometry(c: RoomConfig): Geometry {
 			? { ...c.ceilingLamp, x: clamp(c.ceilingLamp.x, 0, W), y: clamp(c.ceilingLamp.y, 0, L) }
 			: null,
 		curtains: c.curtains ?? null,
+		loggiaSet,
 		area: W * L - (hasNotch ? NW * N : 0),
 		loggiaArea: W * D,
 		issues

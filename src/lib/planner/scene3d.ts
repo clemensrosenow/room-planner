@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadModel } from '../preview/modelLoader';
-import { buildPiece, MaterialKit } from '../preview/models';
+import { buildLoggiaSet, buildPiece, MaterialKit } from '../preview/models';
 import { modelInfo } from './catalog';
 import { cm, cssVar } from './format';
 import { elevation, type FurnitureCheck } from './furniture';
@@ -200,9 +200,12 @@ export class RoomScene {
 			addBox(grp, [g.W + g.tI / 2, ph / 2, ly0 + g.D / 2], [g.tI, ph, g.D], 0, wallMats, {
 				edges: edgeMat
 			});
+			// Fixed table and chairs; part of the Room, so never picked or dragged
+			grp.add(buildLoggiaSet(g.loggiaSet, new MaterialKit()));
 			if (dims) {
+				// Above the table
 				const sp = labelSprite('Loggia', 16, true);
-				sp.position.set(g.W / 2, 20, ly0 + g.D / 2);
+				sp.position.set(g.W / 2, Math.max(20, ...g.loggiaSet.map((i) => i.h + 16)), ly0 + g.D / 2);
 				grp.add(sp);
 			}
 		}

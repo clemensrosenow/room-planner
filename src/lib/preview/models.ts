@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { furnitureKind, modelInfo, partSize } from '../planner/catalog';
+import type { LoggiaItem } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
 import * as mat from './materials';
 import { modelClone } from './modelLoader';
@@ -24,6 +25,8 @@ export class MaterialKit {
 	steel = () => this.get('steel', mat.steel);
 	/** Upholstery in a color (sRGB hex) */
 	cloth = (hex: number) => this.get('cloth' + hex, () => mat.fabric(hex));
+	/** Woven rattan in a color (sRGB hex) */
+	wicker = (hex: number) => this.get('wicker' + hex, () => mat.wicker(hex));
 	/** Satin paint in a color (sRGB hex) */
 	lacquer = (hex: number) => this.get('lacquer' + hex, () => mat.lacquer(hex));
 	/** Plain surface in a fixed color (sRGB hex), e.g. black plastic or white powder coat */
@@ -60,6 +63,68 @@ export function buildPiece(f: Furniture, kit: MaterialKit, loading: string[]): T
 		g.add(obj);
 	}
 	return g;
+}
+
+/**
+ * The Room's fixed table and chairs on the loggia, in plan coordinates (x, y → x, z): a matte top
+ * on four square legs, and chairs with a woven seat and backrest on a frame of their color.
+ */
+export function buildLoggiaSet(items: LoggiaItem[], kit: MaterialKit): THREE.Group {
+	const set = new THREE.Group();
+	for (const it of items) {
+		const g = new THREE.Group();
+		const add = (
+			material: THREE.Material,
+			[sw, sh, sd]: [number, number, number],
+			[x, y0, z]: [number, number, number]
+		) => {
+			const geo = new THREE.BoxGeometry(sw, sh, sd);
+			// UVs in cm, as textured materials expect: faces are ±x, ±y, ±z, four vertices each
+			const uv = geo.attributes.uv;
+			const faces = [
+				[sd, sh],
+				[sd, sh],
+				[sw, sd],
+				[sw, sd],
+				[sw, sh],
+				[sw, sh]
+			];
+			for (let i = 0; i < uv.count; i++) {
+				const [u, v] = faces[Math.floor(i / 4)];
+				uv.setXY(i, uv.getX(i) * u, uv.getY(i) * v);
+			}
+			const m = new THREE.Mesh(geo, material);
+			m.position.set(x, y0 + sh / 2, z);
+			m.castShadow = m.receiveShadow = true;
+			g.add(m);
+		};
+		const { w, d, h } = it;
+		if (it.kind === 'table') {
+			const top = kit.plain(it.color, 0.6);
+			add(top, [w, 3, d], [0, h - 3, 0]);
+			add(top, [w - 10, 6, d - 10], [0, h - 9, 0]);
+			for (const sx of [-1, 1])
+				for (const sz of [-1, 1]) add(top, [5, h - 3, 5], [sx * (w / 2 - 5), 0, sz * (d / 2 - 5)]);
+		} else {
+			// Front at +z: front legs up to the seat, back legs running on as the backrest's posts
+			const frame = kit.plain(it.color, 0.6);
+			const woven = kit.wicker(it.color);
+			const seatH = Math.min(45, h * 0.56);
+			const leg = 3;
+			const [lx, fz, bz] = [w / 2 - leg / 2, d / 2 - leg / 2 - 2, -d / 2 + leg / 2];
+			for (const sx of [-1, 1]) {
+				add(frame, [leg, seatH - 5, leg], [sx * lx, 0, fz]);
+				add(frame, [leg, h, leg], [sx * lx, 0, bz]);
+			}
+			add(woven, [w, 5, d - 2], [0, seatH - 5, -1]);
+			add(woven, [w - 2 * leg, h - seatH - 6, 3], [0, seatH + 2, bz]);
+			add(frame, [w, 3, leg], [0, h - 3, bz]);
+		}
+		g.position.set(it.cx, 0, it.cy);
+		g.rotation.y = (-it.rot * Math.PI) / 180;
+		set.add(g);
+	}
+	return set;
 }
 
 /** A model with a small footprint is moved so its footprint is centered on the piece. */

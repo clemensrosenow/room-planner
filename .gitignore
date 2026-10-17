@@ -24,3 +24,4 @@ vite.config.ts.timestamp-*
 
 # 3D models
 /models**
+.env*

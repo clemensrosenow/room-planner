@@ -10,6 +10,15 @@ import type { Furniture, RoomConfig } from './types';
  */
 export const ROOM_ID = 'clemens-v2';
 
+/** Real colors (sRGB hex) as seen from above, for the blocks in Furnish and the icons */
+const WHITE = 0xf1efea;
+const BLACK = 0x232324;
+const SILVER = 0xc7c9cc;
+const NAVY = 0x1c2741;
+const OAK = 0xc4a07a;
+const PALE_OAK = 0xdecfb6;
+const RATTAN = 0x8b5e3c;
+
 /** Room inputs in cm. Origin is the top-left inner corner, y grows towards the loggia. */
 export const ROOM: RoomConfig = {
 	// Entrance part 168 + Einbuchtung 187; the window wall measures 68 + 224 + 62 = 354
@@ -36,7 +45,13 @@ export const ROOM: RoomConfig = {
 	// Middle of the room's width, a bit towards the entry from the middle of its main part
 	ceilingLamp: { model: 'ikea-ps2014-lamp', x: 175, y: 270 },
 	// The bar starts 10 cm onto the left wall piece and ends just short of the right wall
-	curtains: { color: 0x8c8e90, x0: 68 - 10, x1: 355 - 3 }
+	curtains: { color: 0x8c8e90, x0: 68 - 10, x1: 355 - 3 },
+	// White table with two brown woven chairs
+	loggiaSet: {
+		table: { w: 80, d: 70, h: 80, color: WHITE },
+		chair: { w: 45, d: 50, h: 80, color: RATTAN },
+		gap: 8
+	}
 };
 
 export const GEO = computeGeometry(ROOM);
@@ -124,14 +139,6 @@ function packet(
 /** TROTTEN sit/stand desk, planned at sitting height */
 const DESK_H = 75;
 const STAND_H = MODELS['keyboard-stand'].size.h;
-
-/** Real colors (sRGB hex) as seen from above, for the blocks in Furnish and the icons */
-const WHITE = 0xf1efea;
-const BLACK = 0x232324;
-const SILVER = 0xc7c9cc;
-const NAVY = 0x1c2741;
-const OAK = 0xc4a07a;
-const PALE_OAK = 0xdecfb6;
 
 export const INVENTORY: Piece[] = [
 	{ id: 'bed', name: 'Boxspring bed', kind: 'bed', w: 140, d: 210, h: 50, color: NAVY },

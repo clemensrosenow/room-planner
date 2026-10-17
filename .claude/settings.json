@@ -1,0 +1,26 @@
+{
+	"extraKnownMarketplaces": {
+		"svelte": {
+			"source": {
+				"source": "github",
+				"repo": "sveltejs/ai-tools"
+			}
+		}
+	},
+	"enabledPlugins": {
+		"svelte@svelte": true
+	},
+	"hooks": {
+		"Stop": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-and-test.sh",
+						"timeout": 300
+					}
+				]
+			}
+		]
+	}
+}

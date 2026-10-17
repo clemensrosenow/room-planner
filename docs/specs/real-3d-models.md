@@ -100,6 +100,7 @@ In Experience each lamp gets a physical light at `pos`, with intensity from lume
 - [ ] At most 2 lights cast shadows at once (the brightest lit ones near the camera). Others light without shadows. Auto-exposure accounts for all lit lamps.
 
 **R6. Human point of view**
+
 - Eye height is 180 cm standing and 120 cm sitting (replacing the fixed `EYE = 160` in `shots.ts`). A sit/stand toggle (button + key `C`) animates between them.
 - Field of view keeps a constant **horizontal** angle (start value 75°, vertical clamped to 35°–65°), so wide and narrow windows show the same width of room without distortion.
 - Light adaptation is tuned to ease exposure over ~1.5 s after a big brightness change (lamp on/off, looking at the window) instead of jumping.
@@ -107,6 +108,7 @@ In Experience each lamp gets a physical light at `pos`, with intensity from lume
 - [ ] Sit/stand keeps the camera's floor position and look direction.
 
 **R7. Performance**
+
 - [ ] Experience runs at ≥ 30 fps on the laptop, with all six models placed, all lamps on, at default render quality, measured over a 30 s walk.
 - [ ] First Experience load with an empty cache is ≤ 5 s on home broadband, with the room usable earlier on parametric stand-ins.
 
@@ -137,13 +139,13 @@ This is a personal tool, so metrics are checks rather than analytics.
 
 ## Open Questions
 
-| # | Question | Who | Blocking? |
-|---|----------|-----|-----------|
-| 1 | Lumens and color temperature for each lamp (product pages or bulb packaging) | Clemens | No: default 800 lm / 2700 K |
-| 2 | Are any lamps wall-mounted or desk-top (sitting on the desk)? Desk-top lamps need a placement height above the floor. | Clemens | Yes, for R5 placement |
-| 3 | Is 75° horizontal FOV right, or does it feel too wide or narrow in practice? Tune after first build. | Clemens (design) | No |
-| 4 | Is there a model for the ceiling light too, or does it stay parametric? | Clemens | No |
-| 5 | Do the IKEA FBX materials survive conversion (V-Ray/Corona materials in the .max don't carry over)? Textures may need re-linking in Blender. | Engineering | No, but affects R2 effort |
+| #   | Question                                                                                                                                     | Who              | Blocking?                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | --------------------------- |
+| 1   | Lumens and color temperature for each lamp (product pages or bulb packaging)                                                                 | Clemens          | No: default 800 lm / 2700 K |
+| 2   | Are any lamps wall-mounted or desk-top (sitting on the desk)? Desk-top lamps need a placement height above the floor.                        | Clemens          | Yes, for R5 placement       |
+| 3   | Is 75° horizontal FOV right, or does it feel too wide or narrow in practice? Tune after first build.                                         | Clemens (design) | No                          |
+| 4   | Is there a model for the ceiling light too, or does it stay parametric?                                                                      | Clemens          | No                          |
+| 5   | Do the IKEA FBX materials survive conversion (V-Ray/Corona materials in the .max don't carry over)? Textures may need re-linking in Blender. | Engineering      | No, but affects R2 effort   |
 
 ## Timeline and Phasing
 
