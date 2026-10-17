@@ -11,14 +11,10 @@ import type { RequestHandler } from './$types';
 
 export const prerender = false;
 
-/** Leaderboard page: ?sort=top|new&cursor= */
+/** The whole Leaderboard: ?sort=top|new → { designs } */
 export const GET: RequestHandler = ({ url, request }) =>
 	respond(async () =>
-		listDesigns(
-			url.searchParams.get('sort') === 'new' ? 'new' : 'top',
-			url.searchParams.get('cursor'),
-			await deviceHash(request)
-		)
+		listDesigns(url.searchParams.get('sort') === 'new' ? 'new' : 'top', await deviceHash(request))
 	);
 
 /** Publish the Draft: { title, designer?, placements, remixedFromId? } → { id, slug } */

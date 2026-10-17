@@ -1,15 +1,15 @@
 # Room Planner
 
-Find the best way to furnish one real room. Everyone arranges the same Room with the same real furniture (the Inventory), publishes a Design, shares it by link, likes and remixes the others. The best rise to the top of the Leaderboard. Vocabulary: [CONTEXT.md](CONTEXT.md), decisions: [docs/adr](docs/adr), spec: [docs/specs/shared-designs.md](docs/specs/shared-designs.md).
+Find the best way to furnish one real room. Everyone arranges the same Room with the same real furniture (the Inventory), publishes a Design, shares it by link, judges the others in Duels and remixes them. Duels rank the Designs on the Leaderboard. Vocabulary: [CONTEXT.md](CONTEXT.md), decisions: [docs/adr](docs/adr), specs: [docs/specs/shared-designs.md](docs/specs/shared-designs.md), [docs/specs/duels.md](docs/specs/duels.md).
 
 1. **Furnish** (`/furnish`): arrange the pieces in 3D or on the floor plan. Pieces can only be moved and turned: their sizes and colors are the real ones. The selected piece gets a floating toolbar (rotate, exact position); on the plan it also has a rotation knob. Pieces that stick out of the room, overlap or block a door are Conflicts: they glow red, the blocked door's swing area turns red, and the toolbar says why.
 2. **Experience** (`/experience`): the closed room, realistically lit, for cinematic shots. Preset viewpoints (door, window, corners, above) with smooth camera glides, a looping camera tour (controls fade out). You always stay inside the room: drag to look, ↑↓ to walk, ←→ to turn, scroll or pinch to zoom; only the "above" shot shows the room from outside.
    - Light: sun and sky follow the time-of-day slider in German clock time (glass front faces east, ~51°N, today's date), daylight through the glass, a warm bounce off the sunlit floor, reflections of the real sky, eye-like exposure adaptation at dusk, and a ceiling lamp.
    - Furniture is modelled by its type, or shown as its real 3D model where one exists.
 3. **Publish** (header, on both steps): give the Draft a title (a suggestion is pre-filled, 🎲 for another) and optionally your name. Disabled while there are Conflicts; clicking it then selects the first one. Publishing leads to the Design's page with a share dialog.
-4. **Designs** (`/designs`): the Leaderboard, Top (most likes) or New. A Design page (`/d/<id>-<slug>`) shows it in 3D or as a plan, read-only, with Like, Remix (copies it into your Draft, after a warning if that would replace your own work), Share and, for your own, Delete.
+4. **Designs** (`/designs`): the Leaderboard, Top (by Rank from all Duels) or New. A Design page (`/d/<id>-<slug>`) shows it in 3D or as a plan, read-only, with Remix (copies it into your Draft, after a warning if that would replace your own work), Share and, for your own, Delete.
 
-No accounts: a random id in `localStorage` identifies the browser (Device). It publishes, likes (once per Design, not your own) and deletes what it published. Clearing site data makes a new Device.
+No accounts: a random id in `localStorage` identifies the browser (Device). It publishes, judges Duels (each pair once, never your own Designs) and deletes what it published. Clearing site data makes a new Device.
 
 The Room and Inventory are defined in code (`src/lib/planner/room.ts`) under one `ROOM_ID`. Changing measurements or furniture means a new `ROOM_ID`, which starts a fresh Leaderboard.
 
@@ -39,13 +39,13 @@ The "?" button on each step lists them too.
 
 Soft architectural look: warm paper tones, one sage accent, Manrope, light and dark mode following the system. Colors are CSS variables in `src/routes/layout.css` (the 3D views read them too). Moving between steps cross-fades the pages (View Transitions API); panels and popovers animate in. All motion is switched off with "reduce motion".
 
-Built with SvelteKit (Svelte 5), TailwindCSS v4 and three.js. The Draft is saved in `localStorage`; Published Designs and Likes live in Neon Postgres (Drizzle ORM), served by small JSON endpoints.
+Built with SvelteKit (Svelte 5), TailwindCSS v4 and three.js. The Draft is saved in `localStorage`; Published Designs and Duels live in Neon Postgres (Drizzle ORM), served by small JSON endpoints.
 
 ## Develop
 
 ```sh
 npm install
-vercel env pull .env.local   # DATABASE_URL from the Vercel Neon integration
+vercel env pull .env.local   # DATABASE_URL from the Vercel Neon integration (see below)
 npm run db:migrate           # create or update the tables
 npm run dev                  # dev server
 npm run check                # type check
@@ -53,7 +53,9 @@ npm run lint                 # formatting
 npm run build                # Vercel output in .vercel/output/
 ```
 
-`npm run test:leaderboard` checks Likes and the Leaderboard against the running dev server. It publishes 30 test designs and deletes them again, so use a development database.
+The app reads only `DATABASE_URL`. After `vercel env pull`, keep only `DATABASE_URL` and `VERCEL_OIDC_TOKEN` in `.env.local`: the other variables of the Neon integration point at production. Point `DATABASE_URL` at the Neon `dev` branch for development.
+
+`npm run test:duels` checks Duels and the Leaderboard against the running dev server. It publishes test designs from two Devices, casts Duels and deletes everything it created, so use the `dev` branch database.
 
 After changing `src/lib/server/schema.ts`, run `npm run db:generate` to add a migration in `drizzle/`, then `npm run db:migrate`. Without `DATABASE_URL` the planner still works; only sharing (the API, Designs pages) fails.
 
@@ -61,14 +63,16 @@ After changing `src/lib/server/schema.ts`, run `npm run db:generate` to add a mi
 
 All JSON; every call sends the header `X-Device-Id` (the server stores only its sha256).
 
-| Method & path                    | Does                                                                        | Errors             |
-| -------------------------------- | --------------------------------------------------------------------------- | ------------------ |
-| `GET /api/designs?sort=&cursor=` | Leaderboard page (24), each with `likedByMe`, `mine`, `nextCursor`          | 400 bad cursor     |
-| `GET /api/designs/:id`           | One Design                                                                  | 404                |
-| `POST /api/designs`              | Publish `{ title, designer?, placements, remixedFromId? }` → `{ id, slug }` | 400, 422 conflicts |
-| `DELETE /api/designs/:id`        | Only by the Device that published it                                        | 403, 404           |
-| `PUT /api/designs/:id/like`      | Like (idempotent) → `{ likeCount }`                                         | 403 own, 404       |
-| `DELETE /api/designs/:id/like`   | Unlike (idempotent) → `{ likeCount }`                                       | 404                |
+| Method & path                    | Does                                                                                               | Errors             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------ |
+| `GET /api/designs?sort=top\|new` | Every Design of the Room → `{ designs }`; Top by rank, New newest first                            |                    |
+| `GET /api/designs/:id`           | One Design                                                                                         | 404                |
+| `POST /api/designs`              | Publish `{ title, designer?, placements, remixedFromId? }` → `{ id, slug }`                        | 400, 422 conflicts |
+| `DELETE /api/designs/:id`        | Only by the Device that published it (its Duels go with it)                                        | 403, 404           |
+| `GET /api/duel`                  | Next pair for this Device → `{ pair: [Design, Design] \| null }`                                   | 400 no Device      |
+| `POST /api/duels`                | Judge a pair `{ a, b, winner }` of Design ids; `winner` is the id in `a` or `b`, null = Skip → 201 | 400, 403, 404, 409 |
+
+Every Design comes with `mine` (this Device published it) and its standing: `rank` (1-based, by Bradley-Terry strength over all Duels; equal strength → newer first, then id), `wins` and `losses` (decided Duels only, no Skips) and `provisional` (fewer than 5 of them).
 
 ## Structure
 
@@ -84,7 +88,7 @@ src/
     experience/           step 2: realistic preview
     designs/              Leaderboard (client-side, Top / New)
     d/[ref]/              a Published Design (server-rendered for link previews)
-    api/designs/          JSON API
+    api/                  JSON API (designs, duel, duels)
     layout.css            Tailwind, design tokens (light/dark), step transitions
   lib/
     url.ts                steps, query param and selection helpers
@@ -115,14 +119,16 @@ src/
       format.ts           relative time, "Anonymous"
     server/               server only
       schema.ts, db.ts    Drizzle tables, Neon connection
-      designs.ts          validation, queries, Likes
+      designs.ts          validation, queries, Leaderboard standings
+      standings.ts        rank, wins, losses from the stored Duels (pure)
+      duels.ts            next pair for a Device, casting a Duel
     components/
       Header, Workspace   navigation, Publish; full-screen canvas with floating controls
                           and a side panel (bottom sheet on phones)
       PlanView, Scene3D, Preview                       (PlanView and Preview also read-only)
       SelectionToolbar, Inspector, PieceList, FurnitureIcon   furnish step
       PublishButton, PublishDialog                     publishing the Draft
-      DesignView, DesignCard, PlanThumb, LikeButton    Design page and Leaderboard
+      DesignView, DesignCard, PlanThumb                Design page and Leaderboard
       ui/                 ScrubValue (drag/type number), Segmented, Switch, HelpButton,
                           FloatingBar, IconButton, Icon, ConfirmButton, Dialog, Toaster
 ```

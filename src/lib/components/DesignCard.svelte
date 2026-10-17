@@ -2,11 +2,10 @@
 	import { designerName, timeAgo } from '#lib/social/format.ts';
 	import { designPath } from '#lib/social/slug.ts';
 	import type { DesignData } from '#lib/social/types.ts';
-	import LikeButton from './LikeButton.svelte';
 	import PlanThumb from './PlanThumb.svelte';
 	import Icon from './ui/Icon.svelte';
 
-	/** Leaderboard card. The whole card links to the design; the Like button sits above the link. */
+	/** Leaderboard card. The whole card links to the design. */
 	let { design = $bindable(), rank }: { design: DesignData; rank?: number } = $props();
 </script>
 
@@ -37,7 +36,6 @@
 			</p>
 		</div>
 		<div class="flex items-center justify-between gap-2">
-			<span class="relative z-10"><LikeButton bind:design /></span>
 			{#if design.remixedFrom}
 				<span
 					class="flex items-center gap-1 text-[12px] font-semibold text-muted"

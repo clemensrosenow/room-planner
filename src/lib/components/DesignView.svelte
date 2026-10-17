@@ -10,7 +10,6 @@
 	import { toast } from '#lib/toast.svelte.ts';
 	import { setParams } from '#lib/url.ts';
 	import { onMount } from 'svelte';
-	import LikeButton from './LikeButton.svelte';
 	import PlanView from './PlanView.svelte';
 	import Preview from './Preview.svelte';
 	import ConfirmButton from './ui/ConfirmButton.svelte';
@@ -18,13 +17,11 @@
 	import Icon from './ui/Icon.svelte';
 	import Segmented from './ui/Segmented.svelte';
 
-	/** A Published Design, read-only: 3D or plan, Like, Remix, Share and Delete. */
+	/** A Published Design, read-only: 3D or plan, Remix, Share and Delete. */
 	let { initial }: { initial: DesignData } = $props();
 
 	// svelte-ignore state_referenced_locally
 	let design = $state(structuredClone(initial));
-	/** Whether this Device's Like and ownership are known (they need the Device id) */
-	let personal = $state(false);
 	let mounted = $state(false);
 	let shareOpen = $state(false);
 	let remixOpen = $state(false);
@@ -33,9 +30,7 @@
 	const furn = designFurniture(initial.placements);
 	const url = $derived(page.url.origin + designPath(design));
 	const view = $derived(page.url.searchParams.get('view') === 'plan' ? 'plan' : '3d');
-	const description = $derived(
-		`by ${designerName(design.designer)} · ${design.likeCount} like${design.likeCount === 1 ? '' : 's'} · Furnish Clemens's room`
-	);
+	const description = $derived(`by ${designerName(design.designer)} · Furnish Clemens's room`);
 
 	// Right after publishing, offer to share once
 	afterNavigate(() => {
@@ -46,14 +41,10 @@
 
 	onMount(() => {
 		mounted = true;
+		// Ownership needs the Device id, so only the client knows it
 		getDesign(design.id)
-			.then((d) => {
-				design.likedByMe = d.likedByMe;
-				design.mine = d.mine;
-				design.likeCount = d.likeCount;
-				personal = true;
-			})
-			.catch(() => (personal = true));
+			.then((d) => (design.mine = d.mine))
+			.catch(() => {});
 	});
 
 	async function share() {
@@ -152,15 +143,6 @@
 		</div>
 
 		<div class="flex flex-wrap items-center gap-1.5">
-			{#if personal}
-				<LikeButton bind:design />
-			{:else}
-				<span
-					class="inline-flex items-center gap-1.5 rounded-full bg-paper px-3 py-1.5 text-[13px] font-semibold text-muted"
-				>
-					<Icon name="heart" size={15} />{design.likeCount}
-				</span>
-			{/if}
 			<button class="btn" onclick={() => remix()} title="Copy into your design and change it">
 				<Icon name="remix" size={15} /> Remix
 			</button>
@@ -187,9 +169,7 @@
 	title="Published! Share it with friends"
 	onclose={() => (shareOpen = false)}
 >
-	<p class="text-[13px] text-muted">
-		Anyone with the link can see your design in 3D, like it and remix it.
-	</p>
+	<p class="text-[13px] text-muted">Anyone with the link can see your design in 3D and remix it.</p>
 	<input
 		class="input text-[13px]"
 		readonly

@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm';
 import {
 	type AnyPgColumn,
+	check,
 	index,
-	integer,
 	jsonb,
 	pgTable,
 	primaryKey,
@@ -29,26 +29,38 @@ export const designs = pgTable(
 		remixedFromDesigner: text('remixed_from_designer'),
 		/** sha256 of the publishing Device's id (ADR 0001) */
 		publisherHash: text('publisher_hash').notNull(),
-		likeCount: integer('like_count').notNull().default(0),
-		// Millisecond precision, so a timestamp round-trips through JS exactly (pagination cursor)
+		// Millisecond precision, so a timestamp round-trips through JS exactly
+		createdAt: timestamp('created_at', { withTimezone: true, precision: 3 }).notNull().defaultNow()
+	},
+	(t) => [index('designs_new_idx').on(t.roomId, t.createdAt.desc(), t.id.desc())]
+);
+
+/**
+ * One Device's judgement of a pair of Designs (docs/specs/duels.md, R1). The pair is stored
+ * normalized (design_lo < design_hi), so the primary key allows one Duel per Device per pair.
+ */
+export const duels = pgTable(
+	'duels',
+	{
+		designLo: text('design_lo')
+			.notNull()
+			.references(() => designs.id, { onDelete: 'cascade' }),
+		designHi: text('design_hi')
+			.notNull()
+			.references(() => designs.id, { onDelete: 'cascade' }),
+		/** sha256 of the judging Device's id (ADR 0001) */
+		voterHash: text('voter_hash').notNull(),
+		/** design_lo, design_hi, or null = Skip */
+		winnerId: text('winner_id'),
 		createdAt: timestamp('created_at', { withTimezone: true, precision: 3 }).notNull().defaultNow()
 	},
 	(t) => [
-		index('designs_top_idx').on(t.roomId, t.likeCount.desc(), t.createdAt.desc(), t.id.desc()),
-		index('designs_new_idx').on(t.roomId, t.createdAt.desc(), t.id.desc())
+		primaryKey({ columns: [t.designLo, t.designHi, t.voterHash] }),
+		check('duels_pair_order', sql`${t.designLo} < ${t.designHi}`),
+		check(
+			'duels_winner_in_pair',
+			sql`${t.winnerId} is null or ${t.winnerId} in (${t.designLo}, ${t.designHi})`
+		),
+		index('duels_voter_idx').on(t.voterHash)
 	]
-);
-
-export const likes = pgTable(
-	'likes',
-	{
-		designId: text('design_id')
-			.notNull()
-			.references(() => designs.id, { onDelete: 'cascade' }),
-		likerHash: text('liker_hash').notNull(),
-		createdAt: timestamp('created_at', { withTimezone: true })
-			.notNull()
-			.default(sql`now()`)
-	},
-	(t) => [primaryKey({ columns: [t.designId, t.likerHash] })]
 );

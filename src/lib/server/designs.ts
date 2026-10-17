@@ -1,4 +1,6 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
+import type { Standing } from '../duels/types';
+import { rank } from '../duels/rank';
 import {
 	conflictIds,
 	designFurniture,
@@ -15,9 +17,8 @@ import {
 	type Sort
 } from '../social/types';
 import { db } from './db';
-import { designs, likes } from './schema';
-
-export const PAGE_SIZE = 24;
+import { designs, duels } from './schema';
+import { decided, standings } from './standings';
 
 /** An expected failure with an HTTP status, turned into a JSON response by the endpoints. */
 export class HttpFail extends Error {
@@ -56,7 +57,7 @@ const newId = () =>
 	Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => ID_ALPHABET[b % 32]).join('');
 export const isDesignId = (id: string) => /^[a-z0-9]{8}$/.test(id);
 
-function toData(row: Row, likedByMe: boolean, hash: string | null): DesignData {
+export function toData(row: Row, standing: Standing, hash: string | null): DesignData {
 	return {
 		id: row.id,
 		roomId: row.roomId,
@@ -66,74 +67,55 @@ function toData(row: Row, likedByMe: boolean, hash: string | null): DesignData {
 		remixedFrom: row.remixedFromTitle
 			? { id: row.remixedFromId, title: row.remixedFromTitle, designer: row.remixedFromDesigner }
 			: null,
-		likeCount: row.likeCount,
 		createdAt: row.createdAt.toISOString(),
-		likedByMe,
-		mine: !!hash && row.publisherHash === hash
+		mine: !!hash && row.publisherHash === hash,
+		...standing
 	};
 }
 
-/** Whether the Device with this hash liked the design (false without a Device). */
-const likedBy = (hash: string | null) =>
-	hash
-		? sql<boolean>`exists (select 1 from ${likes} where ${likes.designId} = ${designs.id} and ${likes.likerHash} = ${hash})`
-		: sql<boolean>`false`;
+/**
+ * Every Design of a Room with where it stands: loads all its Designs and decided Duels once and
+ * ranks them (docs/specs/duels.md, R3).
+ */
+export async function loadRoom(roomId: string) {
+	const [rows, judged] = await Promise.all([
+		db().select().from(designs).where(eq(designs.roomId, roomId)),
+		db()
+			.select({ designLo: duels.designLo, designHi: duels.designHi, winnerId: duels.winnerId })
+			.from(duels)
+			.innerJoin(designs, eq(designs.id, duels.designLo))
+			.where(and(eq(designs.roomId, roomId), isNotNull(duels.winnerId)))
+	]);
+	const results = decided(judged);
+	const strength = rank(
+		rows.map((r) => r.id),
+		results
+	);
+	return { rows, strength, standing: standings(rows, results, strength) };
+}
 
 export async function getDesign(id: string, hash: string | null): Promise<DesignData | null> {
 	if (!isDesignId(id)) return null;
-	const [r] = await db()
-		.select({ row: designs, liked: likedBy(hash) })
+	const [row] = await db()
+		.select({ roomId: designs.roomId })
 		.from(designs)
 		.where(eq(designs.id, id));
-	return r ? toData(r.row, r.liked, hash) : null;
+	if (!row) return null;
+	const room = await loadRoom(row.roomId);
+	// Deleted between the two queries
+	const found = room.rows.find((r) => r.id === id);
+	return found ? toData(found, room.standing.get(id)!, hash) : null;
 }
 
-/** Keyset cursor: the sort values of the last design on the page. */
-type Cursor = [likes: number, createdAt: string, id: string];
-
-/** base64url of the JSON (ASCII only, so btoa is enough) */
-const encodeCursor = (r: Row): string =>
-	btoa(JSON.stringify([r.likeCount, r.createdAt.toISOString(), r.id]))
-		.replaceAll('+', '-')
-		.replaceAll('/', '_')
-		.replace(/=+$/, '');
-
-function decodeCursor(s: string): Cursor {
-	try {
-		const c = JSON.parse(atob(s.replaceAll('-', '+').replaceAll('_', '/')));
-		if (
-			Array.isArray(c) &&
-			Number.isInteger(c[0]) &&
-			!Number.isNaN(Date.parse(c[1])) &&
-			typeof c[2] === 'string'
-		)
-			return c as Cursor;
-	} catch {
-		// fall through
-	}
-	throw new HttpFail(400, 'Invalid cursor');
-}
-
-/**
- * Leaderboard page: Top = most Likes first, New = newest first. PAGE_SIZE designs per page;
- * `nextCursor` is null on the last page.
- *
- * TODO(Clemens): implement.
- * - Only designs of this Room (ROOM_ID).
- * - Top: like_count desc, then created_at desc. New: created_at desc. Add a final tie-breaker so
- *   the order is total (two designs can share likes and timestamp).
- * - Keyset pagination: `cursor` holds the sort values of the last design of the previous page
- *   (decodeCursor / encodeCursor above). Fetch the rows that come after it in the sort order.
- *   Tip: fetch PAGE_SIZE + 1 rows to know whether there is a next page.
- * - Each design needs `likedByMe` (see likedBy) and `mine`; toData(row, liked, hash) builds it.
- * The indexes in schema.ts (designs_top_idx, designs_new_idx) match this order.
- */
-export async function listDesigns(
-	sort: Sort,
-	cursor: string | null,
-	hash: string | null
-): Promise<DesignPage> {
-	throw new HttpFail(501, 'The Leaderboard is not implemented yet');
+/** The Leaderboard: every Design of this Room. Top = by rank, New = newest first, then id. */
+export async function listDesigns(sort: Sort, hash: string | null): Promise<DesignPage> {
+	const { rows, standing } = await loadRoom(ROOM_ID);
+	const order =
+		sort === 'top'
+			? (a: Row, b: Row) => standing.get(a.id)!.rank - standing.get(b.id)!.rank
+			: (a: Row, b: Row) =>
+					b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+	return { designs: rows.sort(order).map((r) => toData(r, standing.get(r.id)!, hash)) };
 }
 
 /* ---------- Publishing and deleting ---------- */
@@ -166,7 +148,7 @@ export function parsePublish(body: unknown): Publish {
 	return { title, designer: designer || null, placements, remixedFromId };
 }
 
-const pgCode = (e: unknown): string | undefined => {
+export const pgCode = (e: unknown): string | undefined => {
 	const err = e as { code?: string; cause?: { code?: string } };
 	return err?.code ?? err?.cause?.code;
 };
@@ -204,7 +186,7 @@ export async function publish(p: Publish, hash: string) {
 	}
 }
 
-/** Deletes a design (its Likes go with it). Only the Device that published it may. */
+/** Deletes a design (its Duels go with it). Only the Device that published it may. */
 export async function remove(id: string, hash: string) {
 	const [row] = isDesignId(id)
 		? await db()
@@ -215,29 +197,4 @@ export async function remove(id: string, hash: string) {
 	if (!row) throw new HttpFail(404, 'Design not found');
 	if (row.publisherHash !== hash) throw new HttpFail(403, 'Only its publisher can delete a design');
 	await db().delete(designs).where(eq(designs.id, id));
-}
-
-/* ---------- Likes ---------- */
-
-/**
- * Likes or unlikes and returns the new like count.
- * - 404 if the design doesn't exist, 403 when liking your own (done below).
- * - Idempotent: liking twice counts once, unliking something not liked changes nothing.
- * - `likes` (one row per Like, primary key design_id + liker_hash) and `designs.like_count` must
- *   never drift apart, even when two people like at the same moment.
- * - A design deleted in the meantime should end in a 404, not a 500 (see pgCode).
- *
- * TODO(Clemens): implement the write.
- */
-export async function setLike(id: string, hash: string, liked: boolean): Promise<number> {
-	const [row] = isDesignId(id)
-		? await db()
-				.select({ publisherHash: designs.publisherHash })
-				.from(designs)
-				.where(eq(designs.id, id))
-		: [];
-	if (!row) throw new HttpFail(404, 'Design not found');
-	if (liked && row.publisherHash === hash)
-		throw new HttpFail(403, "You can't like your own design");
-	throw new HttpFail(501, 'Likes are not implemented yet');
 }
