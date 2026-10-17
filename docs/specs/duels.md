@@ -110,7 +110,7 @@ random: () => number; // in [0, 1), injected so tests are deterministic
 - Removed: `PUT` and `DELETE /api/designs/:id/like`, the cursor and `nextCursor`.
 - `DesignData` loses `likeCount` and `likedByMe` and gains:
   - `rank: number`: 1-based position by strength; equal strength → newer first, then id.
-  - `wins: number`, `losses: number`: Skips don't count.
+  - `wins: number`, `losses: number`: real decided Duels only. Skips and the prior's virtual win and loss (R2) never count; the prior only affects strength.
   - `provisional: boolean`: `wins + losses < 5`.
 - Every read loads all Designs and Duels of `ROOM_ID` once, runs `rank`, and derives the fields. `GET /api/duel` additionally loads this Device's seen pairs and calls `nextPair`.
 
@@ -118,10 +118,13 @@ random: () => number; // in [0, 1), injected so tests are deterministic
 
 - The header gets a **Duel** link next to **Designs**.
 - Heading: "Where would you rather live?"
-- Two cards side by side (stacked below 640 px), each a read-only plan (`PlanThumb`), the Design's title and a small **3D** button. The designer's name is not shown.
+- Two cards side by side (stacked below 640 px), each a read-only plan (`PlanThumb`) and the Design's title. The designer's name is not shown.
 - Tapping a card votes for it: the card highlights briefly, then the next pair (already prefetched) slides in.
 - **Skip** is a quiet text button below the cards, not a button of equal weight.
-- **3D** opens the Design read-only in a full-screen overlay (the same view as the Design page, `above` shot), closed with × or Esc, back on the same pair. Only one 3D view exists at a time.
+- **Look inside** (a small button per card) opens that Design read-only in a full-screen overlay (the same view as the Design page, `above` shot). Only one 3D view exists at a time. The overlay's actions replace the cards':
+  - **I'd rather live here** (primary): votes for the Design on screen, closes the overlay, loads the next pair.
+  - **See the other one**: switches the overlay to the other Design of the pair, so both can be walked through in turn.
+  - × or Esc: back to the two plans, nothing voted.
 - When `pair` is null: "You've judged every pair for now. Come back in a few hours to vote on new designs." with a link "Publish your own" to `/furnish`.
 - A 409 or 404 on vote loads the next pair without a message. A network error shows a toast and keeps the pair.
 - `noindex`.
