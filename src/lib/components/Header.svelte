@@ -10,6 +10,7 @@
 	/** Undo, redo and Publish belong to the Draft, so only the steps show them */
 	const editing = $derived(STEPS.some((s) => s.path === page.url.pathname));
 	const onDesigns = $derived(page.url.pathname === '/designs');
+	const onDuel = $derived(page.url.pathname === '/duel');
 
 	const tab = (current: boolean) => [
 		'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors max-sm:px-2.5',
@@ -48,6 +49,15 @@
 				title="Designs by everyone"
 			>
 				<Icon name="trophy" size={15} /><span class="max-sm:hidden">Designs</span>
+			</a>
+			<a
+				href="/duel"
+				class={tab(onDuel)}
+				aria-current={onDuel ? 'page' : undefined}
+				aria-label="Duel"
+				title="Pick where you'd rather live"
+			>
+				<Icon name="scale" size={15} /><span class="max-sm:hidden">Duel</span>
 			</a>
 		</FloatingBar>
 	</nav>
