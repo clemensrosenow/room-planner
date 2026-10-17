@@ -212,6 +212,38 @@ export function fabric(color: number) {
 	});
 }
 
+/**
+ * Woven rattan in a color (sRGB hex): 2 cm strands going over and under each other. The texture
+ * covers 16 cm.
+ */
+export function wicker(color: number) {
+	const size = 256;
+	const cell = size / 8;
+	const c = canvas(size, (x) => {
+		x.fillStyle = 'rgb(70,70,70)';
+		x.fillRect(0, 0, size, size);
+		for (let i = 0; i < 8; i++)
+			for (let j = 0; j < 8; j++) {
+				// Round strands: bright along their middle, darker at the edges
+				const [x0, y0] = [i * cell, j * cell];
+				const across = (i + j) % 2 === 0;
+				const g = across
+					? x.createLinearGradient(0, y0, 0, y0 + cell)
+					: x.createLinearGradient(x0, 0, x0 + cell, 0);
+				g.addColorStop(0, 'rgb(140,140,140)');
+				g.addColorStop(0.5, 'rgb(255,255,255)');
+				g.addColorStop(1, 'rgb(140,140,140)');
+				x.fillStyle = g;
+				x.fillRect(x0 + 1, y0 + 1, cell - 2, cell - 2);
+			}
+	});
+	const map = texture(c);
+	const bumpMap = texture(c, false);
+	map.repeat.set(1 / 16, 1 / 16);
+	bumpMap.repeat.set(1 / 16, 1 / 16);
+	return new THREE.MeshStandardMaterial({ color, map, bumpMap, bumpScale: 0.6, roughness: 0.85 });
+}
+
 /** Satin painted wood (cabinet fronts) in a color (sRGB hex). */
 export const lacquer = (color: number) =>
 	new THREE.MeshStandardMaterial({ color, roughness: 0.42 });
