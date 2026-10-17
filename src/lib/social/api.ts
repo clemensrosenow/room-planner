@@ -33,13 +33,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 	return data as T;
 }
 
-export const listDesigns = (sort: Sort, cursor?: string | null) => {
-	const params = new URLSearchParams({ sort, ...(cursor && { cursor }) });
-	return request<DesignPage>('GET', `/api/designs?${params}`);
-};
+export const listDesigns = (sort: Sort) => request<DesignPage>('GET', `/api/designs?sort=${sort}`);
 export const getDesign = (id: string) => request<DesignData>('GET', `/api/designs/${id}`);
 export const publishDesign = (req: PublishRequest) =>
 	request<{ id: string; slug: string }>('POST', '/api/designs', req);
 export const deleteDesign = (id: string) => request<{ ok: true }>('DELETE', `/api/designs/${id}`);
-export const setLike = (id: string, liked: boolean) =>
-	request<{ likeCount: number }>(liked ? 'PUT' : 'DELETE', `/api/designs/${id}/like`);

@@ -6,24 +6,22 @@
 	import type { DesignData, Sort } from '#lib/social/types.ts';
 	import { setParams } from '#lib/url.ts';
 
-	/** The Leaderboard: Top (most Likes, default) or New (`?sort=new`). */
+	/** The Leaderboard: Top (default) or New (`?sort=new`). */
 	const sort = $derived<Sort>(page.url.searchParams.get('sort') === 'new' ? 'new' : 'top');
 
 	let designs = $state<DesignData[]>([]);
-	let cursor = $state<string | null>(null);
 	let loading = $state(true);
 	let error = $state('');
 
-	async function load(more = false) {
+	async function load() {
 		const s = sort;
 		loading = true;
 		error = '';
 		try {
-			const res = await listDesigns(s, more ? cursor : null);
+			const res = await listDesigns(s);
 			// Ignore answers for a tab that is no longer shown
 			if (s !== sort) return;
-			designs = more ? [...designs, ...res.designs] : res.designs;
-			cursor = res.nextCursor;
+			designs = res.designs;
 		} catch (e) {
 			if (s === sort) error = (e as Error).message;
 		} finally {
@@ -34,7 +32,6 @@
 	$effect(() => {
 		void sort;
 		designs = [];
-		cursor = null;
 		load();
 	});
 </script>
@@ -49,9 +46,7 @@
 		<div class="flex flex-wrap items-end justify-between gap-4">
 			<div class="grid gap-1">
 				<h1 class="text-[26px] font-bold tracking-tight">Designs</h1>
-				<p class="text-muted">
-					Everyone furnishes the same room with the same furniture. Like the best.
-				</p>
+				<p class="text-muted">Everyone furnishes the same room with the same furniture.</p>
 			</div>
 			<Segmented
 				label="Sort"
@@ -83,14 +78,10 @@
 		{#if error}
 			<div class="flex flex-wrap items-center justify-center gap-3 text-center" role="alert">
 				<span class="font-semibold text-warn">{error}</span>
-				<button class="btn" onclick={() => load(designs.length > 0)}>Try again</button>
+				<button class="btn" onclick={() => load()}>Try again</button>
 			</div>
 		{:else if loading}
 			<p class="text-center text-muted" aria-live="polite">Loading…</p>
-		{:else if cursor}
-			<div class="flex justify-center">
-				<button class="btn" onclick={() => load(true)}>Load more</button>
-			</div>
 		{/if}
 	</div>
 </div>
