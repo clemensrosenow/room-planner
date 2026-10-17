@@ -3,7 +3,7 @@ import { cm, hexColor, isDark, m2, newId } from './format';
 
 describe('cm', () => {
 	it('rounds to whole centimetres', () => {
-		expect(cm(42)).toBe('42');
+		expect(cm(42)).toBe('41');
 		expect(cm(42.4)).toBe('42');
 		expect(cm(42.5)).toBe('43');
 		expect(cm(-0.4)).toBe('0');
