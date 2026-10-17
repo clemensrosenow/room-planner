@@ -15,10 +15,12 @@ npm run dev          # dev server
 npm run check        # svelte-kit sync + svelte-check (types)
 npm run lint         # prettier --check (npm run format fixes it)
 npm test             # vitest run: unit tests, no DB, no DOM
-npm run build        # Vercel build; needs Node 22 or 24, no DATABASE_URL
+npm run build        # Vercel build; no DATABASE_URL needed
 npm run db:generate  # new migration in drizzle/ after editing src/lib/server/schema.ts
 npm run db:migrate   # apply migrations to the database in DATABASE_URL
 ```
+
+Node 24 everywhere: `engines.node` in `package.json` sets it for npm (`engine-strict`), CI and Vercel. Change it only there.
 
 `npm run test:leaderboard` publishes and deletes real Designs through a running dev server: it **writes data**. Only run it against the Neon `dev` branch, and only when asked.
 
