@@ -288,6 +288,7 @@
 					x={g.W / 2}
 					y={loggiaY + g.D / 2 + fs * 1.1}
 					font-size={fs * 1.05}
+					stroke-width={fs * 0.45}
 					text-anchor="middle"
 				>
 					Loggia · {m2(g.loggiaArea)}
@@ -645,11 +646,10 @@
 		text-transform: uppercase;
 		opacity: 0.8;
 	}
-	/* Stays readable over the loggia's table and chairs */
+	/* Stays readable over the loggia's table and chairs; the halo's width scales with the text */
 	.on-loggia {
 		paint-order: stroke;
 		stroke: var(--loggia);
-		stroke-width: 5px;
 		stroke-linejoin: round;
 	}
 	.furn {
