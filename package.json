@@ -15,7 +15,8 @@
 		"models": "node scripts/convert-models.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"test:leaderboard": "npx -y tsx scripts/test-leaderboard.ts"
+		"test:leaderboard": "npx -y tsx scripts/test-leaderboard.ts",
+		"test": "vitest run"
 	},
 	"devDependencies": {
 		"@gltf-transform/core": "^4.5.1",
@@ -35,7 +36,8 @@
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
 		"typescript": "^6.0.3",
-		"vite": "^8.3.0"
+		"vite": "^8.3.0",
+		"vitest": "^4.1.12"
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",

@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import adapter from '@sveltejs/adapter-vercel';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -14,5 +15,10 @@ export default defineConfig({
 			},
 			adapter: adapter()
 		})
-	]
+	],
+	test: {
+		// Unit tests for pure logic only: no DOM, no three.js, no database
+		include: ['src/**/*.test.ts'],
+		environment: 'node'
+	}
 });
