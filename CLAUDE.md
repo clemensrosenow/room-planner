@@ -1,10 +1,10 @@
 # Room Planner
 
-Everyone furnishes the same Room with the same Inventory, publishes a Design, and friends Like or Remix it. SvelteKit (Svelte 5) + TailwindCSS v4 + three.js, Neon Postgres via Drizzle, deployed on Vercel. Overview: [README.md](README.md).
+Everyone furnishes the same Room with the same Inventory, publishes a Design and shares it with friends. SvelteKit (Svelte 5) + TailwindCSS v4 + three.js, Neon Postgres via Drizzle, deployed on Vercel. Overview: [README.md](README.md).
 
 ## Source of truth
 
-- [CONTEXT.md](CONTEXT.md) is the vocabulary. Use its terms (Room, Inventory, Piece, Packet, Design, Draft, Published Design, Conflict, Remix, Like, Designer, Device, Leaderboard) in code, tests, commits and PRs, and avoid the words it lists under _Avoid_.
+- [CONTEXT.md](CONTEXT.md) is the vocabulary. Read it first, use its terms in code, tests, commits and PRs, and avoid the words it lists under _Avoid_.
 - [docs/adr](docs/adr) holds the decisions, [docs/specs](docs/specs) the specs. They win over code comments and over your own ideas.
 - **A change that conflicts with an ADR stops and asks.** Don't work around it; explain the conflict and wait.
 
