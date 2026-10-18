@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { nextPair } from '../duels/next-pair';
+import { pickDuel, type NoPairReason } from '../duels/pick-duel';
 import { pairKey, type CastDuelRequest, type DuelCandidate } from '../duels/types';
 import { ROOM_ID } from '../planner/room';
 import type { DesignData } from '../social/types';
@@ -7,8 +7,10 @@ import { db } from './db';
 import { HttpFail, loadRoom, toData, isDesignId, pgCode } from './designs';
 import { designs, duels } from './schema';
 
-/** The next pair this Device should judge, or null when nothing is left (spec R3, R2 nextPair). */
-export async function nextDuel(hash: string): Promise<{ pair: [DesignData, DesignData] | null }> {
+/** The next pair this Device should judge, or why there is none (spec R3, R2 nextPair). */
+export async function nextDuel(
+	hash: string
+): Promise<{ pair: [DesignData, DesignData] } | { pair: null; reason: NoPairReason }> {
 	const [room, judged] = await Promise.all([
 		loadRoom(ROOM_ID),
 		db()
@@ -26,8 +28,9 @@ export async function nextDuel(hash: string): Promise<{ pair: [DesignData, Desig
 			strength: room.strength.get(r.id)!
 		};
 	});
-	const pair = nextPair(candidates, seen, Math.random);
-	if (!pair) return { pair: null };
+	const pick = pickDuel(candidates, seen, Math.random);
+	if (!pick.pair) return pick;
+	const pair = pick.pair;
 	const data = (id: string) =>
 		toData(
 			room.rows.find((r) => r.id === id)!,

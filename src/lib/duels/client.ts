@@ -1,6 +1,7 @@
 import { ApiError } from '../social/api';
 import { deviceId } from '../social/device';
 import type { DesignData } from '../social/types';
+import type { NoPairReason } from './pick-duel';
 import type { CastDuelRequest } from './types';
 
 /** JSON request to the Duel endpoints, identified by this Device (same style as social/api.ts). */
@@ -25,9 +26,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 	return data as T;
 }
 
-/** The next two Designs this Device should judge; null when it has judged every pair. */
-export const getPair = () =>
-	request<{ pair: [DesignData, DesignData] | null }>('GET', '/api/duel').then((r) => r.pair);
+/** GET /api/duel: the next two Designs this Device should judge, or why there are none. */
+export type DuelResponse =
+	{ pair: [DesignData, DesignData] } | { pair: null; reason: NoPairReason };
+
+/** The next pair for this Device, or the reason it has none. */
+export const getPair = () => request<DuelResponse>('GET', '/api/duel');
 
 /** Casts a Duel between `a` and `b`; `winner` is `a`, `b`, or null for Skip. */
 export const vote = (a: string, b: string, winner: string | null) =>

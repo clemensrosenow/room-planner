@@ -1,7 +1,7 @@
 <script lang="ts">
 	import DuelCard from '#lib/components/DuelCard.svelte';
 	import DuelOverlay from '#lib/components/DuelOverlay.svelte';
-	import { getPair, vote } from '#lib/duels/client.ts';
+	import { getPair, vote, type DuelResponse } from '#lib/duels/client.ts';
 	import { pairKey } from '#lib/duels/types.ts';
 	import { duration } from '#lib/motion.ts';
 	import { ApiError } from '#lib/social/api.ts';
@@ -15,8 +15,10 @@
 	/** A Duel: "Where would you rather live?" between two Designs, one tap per vote. */
 	type Pair = [DesignData, DesignData];
 
-	/** undefined while loading, null once this Device has judged every pair */
-	let pair = $state.raw<Pair | null | undefined>(undefined);
+	/** undefined while loading */
+	let duel = $state.raw<DuelResponse | undefined>(undefined);
+	/** undefined while loading, null when there is nothing to judge (`duel.reason` says why) */
+	const pair = $derived<Pair | null | undefined>(duel?.pair);
 	let error = $state('');
 	/** While a vote is cast and the next pair loads; `chosen` is highlighted meanwhile */
 	let busy = $state(false);
@@ -29,9 +31,9 @@
 
 	async function load() {
 		error = '';
-		pair = undefined;
+		duel = undefined;
 		try {
-			pair = await getPair();
+			duel = await getPair();
 		} catch (e) {
 			error = (e as Error).message;
 		}
@@ -54,7 +56,7 @@
 				if (!(e instanceof ApiError && (e.status === 404 || e.status === 409))) throw e;
 			}
 			const [next] = await Promise.all([getPair(), highlight]);
-			pair = next;
+			duel = next;
 		} catch (e) {
 			// No connection: keep the pair so the vote can be tried again
 			toast.show((e as Error).message);
@@ -136,13 +138,22 @@
 				<p class="text-[12px] text-muted max-sm:hidden">← → to choose · S to skip</p>
 			</div>
 			<p class="sr-only" aria-live="polite">{pair[0].title} or {pair[1].title}</p>
-		{:else if pair === null}
+		{:else if duel && !duel.pair}
 			<div
 				class="grid justify-items-center gap-3 rounded-3xl bg-sheet px-6 py-16 text-center ring-1 ring-line/70"
 			>
-				<p class="text-[17px] font-bold">You've judged every pair for now.</p>
-				<p class="text-muted">Come back in a few hours to vote on new designs.</p>
-				<a href="/furnish" class="btn btn-primary">Publish your own</a>
+				{#if duel.reason === 'too-few'}
+					<p class="text-[17px] font-bold">Not enough designs yet</p>
+					<p class="text-muted">
+						Duels need at least two designs from other people. Publish yours and share the link with
+						friends.
+					</p>
+					<a href="/furnish" class="btn btn-primary">Furnish your design</a>
+				{:else}
+					<p class="text-[17px] font-bold">You've judged every pair for now.</p>
+					<p class="text-muted">Come back in a few hours to vote on new designs.</p>
+					<a href="/furnish" class="btn btn-primary">Publish your own</a>
+				{/if}
 			</div>
 		{:else if error}
 			<div class="flex flex-wrap items-center justify-center gap-3 text-center" role="alert">

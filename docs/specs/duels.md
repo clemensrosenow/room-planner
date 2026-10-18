@@ -31,7 +31,7 @@ Friends should find the best way to furnish the Room, not the most popular one. 
 - As a friend, I never get my own Designs and never the same pair twice.
 - As a friend, I see on the Leaderboard where each Design ranks, its wins and losses, and whether that rank is still provisional.
 - Edge case: I've judged every pair available to me. The page tells me to come back in a few hours.
-- Edge case: there are fewer than two Designs I'm allowed to judge. Same message.
+- Edge case: there are fewer than two Designs I'm allowed to judge. The page says there aren't enough Designs yet and asks me to publish mine.
 - Edge case: a Design in my pair was deleted while I looked at it. My vote fails quietly and the next pair loads.
 
 ## Requirements
@@ -103,10 +103,11 @@ random: () => number; // in [0, 1), injected so tests are deterministic
 | ---------------------------------------------- | -------------------------------------------------------------------------- | ------------------ |
 | `GET /api/designs?sort=top\|new`               | Every Design of `ROOM_ID`: Top by rank, New by `createdAt` desc            |                    |
 | `GET /api/designs/:id`                         | One Design                                                                 | 404                |
-| `GET /api/duel`                                | `{ pair: [DesignData, DesignData] \| null }` for this Device (R2 nextPair) | 400 no Device      |
+| `GET /api/duel`                                | `{ pair: [DesignData, DesignData] }` / `{ pair: null, reason }` (nextPair) | 400 no Device      |
 | `POST /api/duels`                              | `{ a, b, winner }` (winner = a, b or null for Skip) → 201                  | 400, 403, 404, 409 |
 | `POST /api/designs`, `DELETE /api/designs/:id` | unchanged                                                                  |                    |
 
+- `GET /api/duel` without a pair says why: `reason` is `too-few` when fewer than 2 Designs of `ROOM_ID` weren't published by this Device, otherwise `all-judged`.
 - Removed: `PUT` and `DELETE /api/designs/:id/like`, the cursor and `nextCursor`.
 - `DesignData` loses `likeCount` and `likedByMe` and gains:
   - `rank: number`: 1-based position by strength; equal strength → newer first, then id.
@@ -125,7 +126,9 @@ random: () => number; // in [0, 1), injected so tests are deterministic
   - **I'd rather live here** (primary): votes for the Design on screen, closes the overlay, loads the next pair.
   - **See the other one**: switches the overlay to the other Design of the pair, so both can be walked through in turn.
   - × or Esc: back to the two plans, nothing voted.
-- When `pair` is null: "You've judged every pair for now. Come back in a few hours to vote on new designs." with a link "Publish your own" to `/furnish`.
+- When `pair` is null, by `reason`:
+  - `too-few`: "Not enough designs yet", "Duels need at least two designs from other people. Publish yours and share the link with friends." and the primary link "Furnish your design" to `/furnish`.
+  - `all-judged`: "You've judged every pair for now. Come back in a few hours to vote on new designs." with a link "Publish your own" to `/furnish`.
 - A 409 or 404 on vote loads the next pair without a message. A network error shows a toast and keeps the pair.
 - `noindex`.
 
