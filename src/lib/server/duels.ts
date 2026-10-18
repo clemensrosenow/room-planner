@@ -1,11 +1,11 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { nextPair } from '../duels/next-pair';
 import { pairKey, type CastDuelRequest, type DuelCandidate } from '../duels/types';
 import { ROOM_ID } from '../planner/room';
 import type { DesignData } from '../social/types';
 import { db } from './db';
-import { HttpFail, loadRoom, toData } from './designs';
-import { duels } from './schema';
+import { HttpFail, loadRoom, toData, isDesignId, pgCode } from './designs';
+import { designs, duels } from './schema';
 
 /** The next pair this Device should judge, or null when nothing is left (spec R3, R2 nextPair). */
 export async function nextDuel(hash: string): Promise<{ pair: [DesignData, DesignData] | null }> {
@@ -48,20 +48,7 @@ export function parseCastDuel(body: unknown): CastDuelRequest {
 }
 
 /**
- * Stores one Device's judgement of a pair. `winner` is a Design id, the same string as `a` or `b`
- * (not the letters "a" / "b"), or null for a Skip; it is stored as `winner_id`.
- * Contract in docs/specs/duels.md, R2:
- * - 400 when `a === b`, an id isn't a valid Design id (isDesignId), or `winner` is neither the
- *   id in `a`, the id in `b`, nor null.
- * - 404 when a Design doesn't exist, also when it is deleted between the check and the insert:
- *   the insert then fails with a foreign key violation, `23503` (pgCode in designs.ts).
- * - 403 when the voter published either Design (`publisherHash === voterHash`).
- * - 409 when this Device already judged the pair: insert with `on conflict do nothing`; 0 rows
- *   inserted means the primary key (design_lo, design_hi, voter_hash) was already there. This
- *   also holds when two requests race.
- * - Stores the pair normalized: design_lo < design_hi (string order), see `duels` in schema.ts.
- *
- * TODO(Clemens): implement.
+ * Stores one Device's judgement of a pair.
  */
 export async function castDuel(
 	voterHash: string,
@@ -69,9 +56,42 @@ export async function castDuel(
 	b: string,
 	winner: string | null
 ): Promise<void> {
-	void voterHash;
-	void a;
-	void b;
-	void winner;
-	throw new HttpFail(501, 'Duels are not implemented yet');
+	if (a === b) throw new HttpFail(400, 'A Duel needs two different designs');
+	if (!isDesignId(a) || !isDesignId(b)) throw new HttpFail(400, 'Invalid design id');
+
+	if (winner !== null && winner !== a && winner !== b)
+		throw new HttpFail(400, 'The winner must be one of the two designs, or null to skip');
+
+	const [lo, hi] = a < b ? [a, b] : [b, a];
+
+	const rows = await db()
+		.select({ publisherHash: designs.publisherHash })
+		.from(designs)
+		.where(and(eq(designs.roomId, ROOM_ID), inArray(designs.id, [a, b])));
+
+	if (rows.length < 2) throw new HttpFail(404, 'Design not found');
+
+	if (rows.some((r) => r.publisherHash === voterHash))
+		throw new HttpFail(403, "You can't judge a Duel with your own design");
+
+	let inserted;
+	try {
+		inserted = await db()
+			.insert(duels)
+			.values({
+				designLo: lo,
+				designHi: hi,
+				winnerId: winner,
+				voterHash
+			})
+			.onConflictDoNothing()
+			.returning({ voterHash: duels.voterHash });
+	} catch (e) {
+		if (pgCode(e) === '23503') throw new HttpFail(404, 'Design not found');
+		throw e;
+	}
+
+	if (inserted.length === 0) {
+		throw new HttpFail(409, 'You already judged this pair');
+	}
 }
