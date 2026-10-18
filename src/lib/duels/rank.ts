@@ -60,7 +60,7 @@ function countGames(designIds: string[], duels: DuelResult[]): Games {
  *   s[i] = (wins[i] + 1) / (2 / (s[i] + 1) + Σ over i's Duels of 1 / (s[i] + s[opponent]))
  * The +1 and the 2 / (s[i] + 1) are the prior's virtual win and its 2 games.
  */
-function fit(games: Games, maxIterations: number, tolerance: number) {
+function fit(games: Games, maxIterations: number, tolerance: number): Float64Array {
 	const { wins, winners, losers } = games;
 
 	const n = wins.length;
@@ -95,7 +95,7 @@ function fit(games: Games, maxIterations: number, tolerance: number) {
 }
 
 /** Scales strengths so their geometric mean is 1. Sums logs: a product of 200 strengths can overflow. */
-function normalize(strengths: Float64Array ): Float64Array {
+function normalize(strengths: Float64Array): Float64Array {
 	const logSum = strengths.reduce((sum, rawStrength) => sum + Math.log(rawStrength), 0);
 	const geometricMean = Math.exp(logSum / strengths.length);
 	return strengths.map((rawStrength) => rawStrength / geometricMean);
