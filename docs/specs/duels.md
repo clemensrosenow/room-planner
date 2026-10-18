@@ -68,7 +68,7 @@ Bradley-Terry strength per Design: P(a beats b) = s(a) / (s(a) + s(b)).
 - [ ] Normalized so the geometric mean of all strengths is 1. A Design without Duels gets exactly 1 when all others are balanced.
 - [ ] Deterministic and independent of the order of `duels`.
 - [ ] Monotone: replacing one of a Design's losses by a win never lowers its strength.
-- [ ] Converges to a relative change < 1e-9, at most 1000 iterations, < 50 ms for 200 Designs and 5000 Duels.
+- [ ] Stops when the relative change is < 1e-9 or after 1000 iterations, whichever comes first; < 50 ms for 200 Designs and 5000 Duels.
 
 **`nextPair(candidates, seen, random): [string, string] | null`** in `next-pair.ts`
 

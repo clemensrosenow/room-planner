@@ -15,7 +15,7 @@
 		"models": "node scripts/convert-models.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"test:leaderboard": "npx -y tsx scripts/test-leaderboard.ts",
+		"test:duels": "npx -y tsx scripts/test-duels.ts",
 		"test": "vitest run"
 	},
 	"devDependencies": {
