@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ArrivalCard from '#lib/components/ArrivalCard.svelte';
 	import DuelCard from '#lib/components/DuelCard.svelte';
 	import DuelOverlay from '#lib/components/DuelOverlay.svelte';
 	import { getPair, vote, type DuelResponse } from '#lib/duels/client.ts';
@@ -108,6 +109,8 @@
 			</h1>
 			<p class="text-muted">Same room, same furniture. Tap the one you'd pick.</p>
 		</div>
+
+		<ArrivalCard where="duel" />
 
 		{#if pair}
 			{#key pairKey(pair[0].id, pair[1].id)}

@@ -208,7 +208,7 @@
 				</span>
 			</FloatingBar>
 
-			<FloatingBar label="Camera">
+			<FloatingBar label="Camera" hint="camera">
 				<div class="flex max-w-[calc(100vw-12rem)] items-center gap-0.5 overflow-x-auto">
 					{#each shots as shot (shot.id)}
 						{#if shot.id === corners[0]?.id}

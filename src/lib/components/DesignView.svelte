@@ -10,6 +10,7 @@
 	import { toast } from '#lib/toast.svelte.ts';
 	import { setParams } from '#lib/url.ts';
 	import { onMount } from 'svelte';
+	import ArrivalCard from './ArrivalCard.svelte';
 	import PlanView from './PlanView.svelte';
 	import Preview from './Preview.svelte';
 	import ConfirmButton from './ui/ConfirmButton.svelte';
@@ -142,6 +143,13 @@
 			{/if}
 		</div>
 
+		<ArrivalCard
+			where="design"
+			designer={design.designer}
+			own={design.mine}
+			onremix={() => remix()}
+		/>
+
 		<p class="flex flex-wrap items-center gap-2 text-[13px]">
 			<span
 				class={[
@@ -205,6 +213,17 @@
 		>
 			<Icon name="share" size={15} /> Share link
 		</button>
+	</div>
+	<div class="grid justify-items-start gap-2.5 border-t border-line pt-4">
+		<p class="text-[13px] leading-snug">
+			<span class="font-bold">What's next?</span>
+			<span class="text-muted"
+				>See how your design holds up: judge other designs in Duels. Yours will show up for others.</span
+			>
+		</p>
+		<a href="/duel" class="btn" onclick={() => (shareOpen = false)}>
+			<Icon name="scale" size={15} /> Start a Duel
+		</a>
 	</div>
 </Dialog>
 

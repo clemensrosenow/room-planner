@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Inspector from '#lib/components/Inspector.svelte';
+	import OnboardingHints from '#lib/components/OnboardingHints.svelte';
+	import WelcomeCard from '#lib/components/WelcomeCard.svelte';
 	import InventoryDock from '#lib/components/InventoryDock.svelte';
 	import PieceList from '#lib/components/PieceList.svelte';
 	import PlanView from '#lib/components/PlanView.svelte';
@@ -11,7 +13,12 @@
 	import HelpButton from '#lib/components/ui/HelpButton.svelte';
 	import IconButton from '#lib/components/ui/IconButton.svelte';
 	import Segmented from '#lib/components/ui/Segmented.svelte';
+	import { DragWatch } from '#lib/onboarding/drag.svelte.ts';
+	import { nextOnboarding } from '#lib/onboarding/next.ts';
+	import { onboarding } from '#lib/onboarding/state.svelte.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
+	import { INVENTORY } from '#lib/planner/room.ts';
+	import { ui } from '#lib/ui.svelte.ts';
 	import { selectItem, setParams } from '#lib/url.ts';
 	import { duration } from '#lib/motion.ts';
 	import { fly, scale } from 'svelte/transition';
@@ -43,6 +50,22 @@
 	let anchor = $state<{ x: number; y: number } | null>(null);
 	let canvasW = $state(0);
 	let canvasH = $state(0);
+
+	const drag = new DragWatch();
+
+	const shown = $derived(
+		nextOnboarding({
+			page: 'furnish',
+			state: onboarding.snapshot,
+			placed: planner.furn.length,
+			total: INVENTORY.length,
+			conflicts: planner.conflicts.length,
+			selected: !!(planner.selected && anchor),
+			dragging: drag.active,
+			dialogOpen: ui.modals > 0,
+			ownDesign: false
+		})
+	);
 
 	async function openDetails(id?: string) {
 		if (id && id !== itemId) await selectItem(id);
@@ -90,7 +113,13 @@
 	<title>Furnish · Room Planner</title>
 </svelte:head>
 
-<svelte:window {onkeydown} />
+<svelte:window
+	{onkeydown}
+	onpointerdown={drag.down}
+	onpointermove={drag.move}
+	onpointerup={drag.up}
+	onpointercancel={drag.up}
+/>
 
 {#snippet inspector()}
 	{#if planner.selected}<Inspector f={planner.selected} />{/if}
@@ -128,7 +157,7 @@
 			</div>
 		{/if}
 
-		{#if planner.furn.length === 0}
+		{#if planner.furn.length === 0 && shown !== 'drag-in'}
 			<p
 				class="pointer-events-none absolute inset-x-0 top-1/2 mx-auto w-fit rounded-full bg-sheet/85 px-5 py-2.5 text-[14px] font-semibold text-muted shadow-float backdrop-blur-md"
 			>
@@ -140,6 +169,7 @@
 			<!-- Quick actions float above the selected piece, kept inside the view -->
 			<div
 				transition:scale={{ start: 0.92, duration: duration(140) }}
+				data-hint="toolbar"
 				class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full"
 				style:left="{Math.min(Math.max(anchor.x, 170), canvasW - 170)}px"
 				style:top="{Math.min(Math.max(anchor.y - 14, 150), canvasH - 110)}px"
@@ -211,3 +241,6 @@
 		<InventoryDock {planPoint} />
 	</div>
 </Workspace>
+
+<WelcomeCard open={shown === 'welcome'} />
+<OnboardingHints {shown} />
