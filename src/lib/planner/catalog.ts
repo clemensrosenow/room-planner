@@ -12,7 +12,7 @@ export type Kind =
 	| 'monitor'
 	| 'laptop'
 	| 'piano'
-	| 'easel'
+	| 'plant'
 	| 'box';
 
 /** Guess by name (English and German), first match wins. For pieces saved without a kind. */
@@ -22,7 +22,7 @@ const BY_NAME: [Kind, RegExp][] = [
 	['shelf', /shelf|book|regal|rack|kallax/i],
 	['lamp', /lamp|leuchte/i],
 	['piano', /piano|keyboard|klavier/i],
-	['easel', /flipchart|easel|staffelei/i],
+	['plant', /plant|monstera|pflanze/i],
 	['monitor', /monitor|display|screen|bildschirm/i],
 	['laptop', /laptop|notebook/i],
 	['stool', /stool|hocker/i],
@@ -45,6 +45,19 @@ export interface LampLight {
 }
 
 /**
+ * One box of a model's Footprint, in model coordinates (cm): center x / z, width along x, depth
+ * along z, from height y0 to y1.
+ */
+export interface FootprintBox {
+	x: number;
+	z: number;
+	w: number;
+	d: number;
+	y0: number;
+	y1: number;
+}
+
+/**
  * Real 3D models in `static/models/` (see scripts/convert-models.ts). A piece linked to one
  * takes the model's size; the GLB replaces the parametric model in both 3D views.
  */
@@ -56,11 +69,11 @@ export interface ModelInfo {
 	/** Floor pieces have their origin at the floor center, ceiling pieces at the top center */
 	mount: 'floor' | 'ceiling';
 	/**
-	 * Floor footprint when much smaller than the model, e.g. an arc lamp's foot: its size and the
-	 * center of it in model coordinates (cm). The piece's box is the footprint, so the head can
-	 * reach over other pieces without a Conflict.
+	 * Footprint when one box around the model would be too coarse, e.g. an arc lamp's foot and its
+	 * head. The first box is the foot: the piece's box, centered on the piece. Higher boxes may
+	 * reach over lower pieces without a Conflict.
 	 */
-	base?: { w: number; d: number; x: number; z: number };
+	footprint?: FootprintBox[];
 	/** Small enough to stand on a nightstand or desk: placed over one, it sits on top */
 	onTop?: boolean;
 	light?: LampLight;
@@ -86,7 +99,11 @@ export const MODELS: Record<string, ModelInfo> = {
 		kind: 'lamp',
 		size: { w: 122.1, d: 127.3, h: 208.1 },
 		mount: 'floor',
-		base: { w: 48, d: 48, x: -37.1, z: 39.7 },
+		// The foot carries the pole up to the arm; arm and shade reach far over the foot
+		footprint: [
+			{ x: -37.1, z: 39.7, w: 48, d: 48, y0: 0, y1: 150 },
+			{ x: 10, z: -10.5, w: 102, d: 107, y0: 150, y1: 208.1 }
+		],
 		light: { pos: [39, 170, -42], intensity: 10 }
 	},
 	'ikea-ps2014-lamp': {
@@ -114,11 +131,16 @@ export const MODELS: Record<string, ModelInfo> = {
 		size: { w: 98.1, d: 52.5, h: 67.8 },
 		mount: 'floor'
 	},
-	flipchart: {
-		label: 'Flipchart',
-		kind: 'easel',
-		size: { w: 70, d: 65, h: 190 },
-		mount: 'floor'
+	monstera: {
+		label: 'Monstera',
+		kind: 'plant',
+		size: { w: 95.8, d: 83.7, h: 97.7 },
+		mount: 'floor',
+		// The pot stands off the model's center; the leaves spread wide above it
+		footprint: [
+			{ x: -11, z: -1.5, w: 54, d: 33, y0: 0, y1: 20 },
+			{ x: 0, z: 0, w: 95.8, d: 83.7, y0: 20, y1: 97.7 }
+		]
 	},
 	radiator: {
 		label: 'Radiator',

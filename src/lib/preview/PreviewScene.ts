@@ -557,9 +557,9 @@ export class PreviewScene {
 			piece.updateWorldMatrix(true, true);
 			// Bulb: from the model, else just under the top of the stand-in's shade
 			// (cm from the piece's origin; a bare model clone is scaled to meters)
-			const base = model ? info?.base : undefined;
+			const foot = model ? info?.footprint?.[0] : undefined;
 			const local = info?.light
-				? new THREE.Vector3(...info.light.pos).sub(new THREE.Vector3(base?.x ?? 0, 0, base?.z ?? 0))
+				? new THREE.Vector3(...info.light.pos).sub(new THREE.Vector3(foot?.x ?? 0, 0, foot?.z ?? 0))
 				: new THREE.Vector3(0, ceiling ? -f.h + 10 : f.h - 10, 0);
 			const bulb = piece.localToWorld(local.divideScalar(piece.scale.x));
 			const sphere = new THREE.Mesh(new THREE.SphereGeometry(2.5, 16, 12), this.lampShade);

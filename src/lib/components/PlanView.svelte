@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { modelInfo, partSize } from '#lib/planner/catalog.ts';
+	import { partSize } from '#lib/planner/catalog.ts';
 	import { cm, hexColor, isDark, m2 } from '#lib/planner/format.ts';
-	import { bbox, describeCheck, normalizeAngle } from '#lib/planner/furniture.ts';
+	import { bbox, describeCheck, footprint, normalizeAngle } from '#lib/planner/furniture.ts';
 	import { buildWalls, segmentPolygon } from '#lib/planner/geometry.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Furniture, Point } from '#lib/planner/types.ts';
@@ -548,20 +548,19 @@
 			>
 				<title>{[f.name, ...describeCheck(checks[f.id])].join(' · ')}</title>
 			</rect>
-			<!-- A piece standing on a small foot (arc lamp) shows how far its head reaches -->
-			{@const reach = modelInfo(f)?.base ? modelInfo(f) : undefined}
-			{#if reach?.base}
+			<!-- Boxes higher up (an arc lamp's head, a plant's leaves) show faintly how far they reach -->
+			{#each footprint(f).slice(1) as b, i (i)}
 				<rect
 					class="reach"
 					vector-effect="non-scaling-stroke"
-					x={-reach.base.x - reach.size.w / 2}
-					y={-reach.base.z - reach.size.d / 2}
-					width={reach.size.w}
-					height={reach.size.d}
+					x={b.x - b.w / 2}
+					y={b.y - b.d / 2}
+					width={b.w}
+					height={b.d}
 					rx="6"
 					transform="translate({f.cx} {f.cy}) rotate({f.rot})"
 				/>
-			{/if}
+			{/each}
 			<!-- A packet shows the outlines of its parts -->
 			{#each f.parts ?? [] as p, i (i)}
 				{@const s = partSize(p)}
@@ -704,9 +703,9 @@
 	.reach {
 		fill: none;
 		stroke: #8a8782;
-		stroke-opacity: 0.8;
+		stroke-opacity: 0.3;
 		stroke-width: 1;
-		stroke-dasharray: 4 4;
+		stroke-dasharray: 2 5;
 		pointer-events: none;
 	}
 	.part {

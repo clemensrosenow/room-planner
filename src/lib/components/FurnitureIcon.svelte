@@ -14,7 +14,8 @@
 		stool: '<circle class="f" cx="20" cy="20" r="9"/><circle cx="20" cy="20" r="2.5"/>',
 		piano:
 			'<rect class="f" x="4" y="12" width="32" height="9" rx="1.5"/><path d="M8 17v4m4-4v4m4-4v4m4-4v4m4-4v4m4-4v4m4-4v4"/><circle cx="20" cy="29" r="4"/>',
-		easel: '<path class="f" d="M8 11h24v6H8z"/><path d="M11 17l-3 15m24-15l3 15M20 17v12"/>',
+		plant:
+			'<path class="f" d="M20 20C16 9 7 7 6 13s7 8 14 7zm0 0c4-11 13-13 14-7s-7 8-14 7zm0 0c-3 7-11 11-8 14s8-4 8-14zm0 0c3 7 11 11 8 14s-8-4-8-14z"/><circle cx="20" cy="20" r="3"/>',
 		chair:
 			'<rect class="f" x="12" y="13" width="16" height="16" rx="3"/><rect x="11" y="9" width="18" height="4" rx="1.5"/>',
 		wardrobe:

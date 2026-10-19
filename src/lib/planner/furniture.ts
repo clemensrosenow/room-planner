@@ -20,17 +20,51 @@ function toPlan(f: Furniture, px: number, py: number): Point {
 	return [f.cx + px * c - py * s, f.cy + px * s + py * c];
 }
 
-export function corners(f: Furniture): Point[] {
+/**
+ * One box of a piece's Footprint: center x / y relative to the piece's center (cm, unrotated,
+ * x along its width, y along its depth), its width and depth, and the heights it spans above
+ * where the piece stands.
+ */
+export interface Box {
+	x: number;
+	y: number;
+	w: number;
+	d: number;
+	y0: number;
+	y1: number;
+}
+
+/**
+ * The boxes the piece takes up, foot first. Most pieces are one box of their size; a model with
+ * a Footprint (an arc lamp, a plant) has its foot centered on the piece and more boxes above.
+ */
+export function footprint(f: Furniture): Box[] {
+	const boxes = modelInfo(f)?.footprint;
+	if (!boxes) return [{ x: 0, y: 0, w: f.w, d: f.d, y0: 0, y1: f.h }];
+	const [foot] = boxes;
+	return boxes.map((b) => ({
+		x: b.x - foot.x,
+		y: b.z - foot.z,
+		w: b.w,
+		d: b.d,
+		y0: b.y0,
+		y1: b.y1
+	}));
+}
+
+/** Plan corners of one box of the piece, the foot by default. */
+export function corners(f: Furniture, b: Box = footprint(f)[0]): Point[] {
 	return [
 		[-1, -1],
 		[1, -1],
 		[1, 1],
 		[-1, 1]
-	].map(([sx, sy]) => toPlan(f, (sx * f.w) / 2, (sy * f.d) / 2));
+	].map(([sx, sy]) => toPlan(f, b.x + (sx * b.w) / 2, b.y + (sy * b.d) / 2));
 }
 
+/** Plan bounding box around all boxes of the piece. */
 export function bbox(f: Furniture) {
-	const cs = corners(f);
+	const cs = footprint(f).flatMap((b) => corners(f, b));
 	const xs = cs.map((p) => p[0]);
 	const ys = cs.map((p) => p[1]);
 	return {
@@ -41,18 +75,18 @@ export function bbox(f: Furniture) {
 	};
 }
 
-/** Grid of points covering the footprint, spaced at most `step` cm apart. */
-function samplePoints(f: Furniture, step: number): Point[] {
-	const nx = Math.max(1, Math.ceil(f.w / step));
-	const ny = Math.max(1, Math.ceil(f.d / step));
+/** Grid of points covering one box, spaced at most `step` cm apart. */
+function samplePoints(f: Furniture, b: Box, step: number): Point[] {
+	const nx = Math.max(1, Math.ceil(b.w / step));
+	const ny = Math.max(1, Math.ceil(b.d / step));
 	const pts: Point[] = [];
 	for (let i = 0; i <= nx; i++)
 		for (let j = 0; j <= ny; j++)
-			pts.push(toPlan(f, -f.w / 2 + (f.w * i) / nx, -f.d / 2 + (f.d * j) / ny));
+			pts.push(toPlan(f, b.x - b.w / 2 + (b.w * i) / nx, b.y - b.d / 2 + (b.d * j) / ny));
 	return pts;
 }
 
-/** Whether a plan point lies on the piece's footprint. */
+/** Whether a plan point lies on the piece's foot. */
 function covers(f: Furniture, x: number, y: number) {
 	const a = (f.rot * Math.PI) / 180;
 	const dx = x - f.cx;
@@ -86,10 +120,8 @@ export function elevation(f: Furniture, all: Furniture[]) {
 	return support ? surface(support) : 0;
 }
 
-/** Separating axis test; touching (< 0.5 cm overlap) does not count. */
-function overlaps(a: Furniture, b: Furniture) {
-	const A = corners(a);
-	const B = corners(b);
+/** Separating axis test of two plan boxes; touching (< 0.5 cm overlap) does not count. */
+function boxesOverlap(A: Point[], B: Point[]) {
 	for (const poly of [A, B])
 		for (let i = 0; i < 2; i++) {
 			const p = poly[i];
@@ -103,6 +135,22 @@ function overlaps(a: Furniture, b: Furniture) {
 			if (overlap / Math.hypot(axis[0], axis[1]) < 0.5) return false;
 		}
 	return true;
+}
+
+/**
+ * Whether two pieces take up the same space: a box of one overlaps a box of the other in plan
+ * and in height. `za` / `zb` are the heights the pieces stand at.
+ */
+function overlaps(a: Furniture, b: Furniture, za = 0, zb = 0) {
+	const bs = footprint(b).map((box) => ({ box, cs: corners(b, box) }));
+	return footprint(a).some((ba) => {
+		const ca = corners(a, ba);
+		return bs.some(
+			({ box: bb, cs }) =>
+				Math.min(za + ba.y1, zb + bb.y1) - Math.max(za + ba.y0, zb + bb.y0) >= 0.5 &&
+				boxesOverlap(ca, cs)
+		);
+	});
 }
 
 /** The radiator as a box, for overlap tests. */
@@ -123,26 +171,29 @@ function radiatorBox(g: Geometry): Furniture | null {
 }
 
 /**
- * Doors blocked and pieces (or the radiator) overlapped. Ceiling lamps hang above everything,
- * and a piece standing on another doesn't overlap it.
+ * Doors blocked and pieces (or the radiator) overlapped, box by box at the heights they span.
+ * Ceiling lamps hang above everything, and a piece standing on another doesn't overlap it.
  */
 export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): FurnitureCheck {
 	const outside = !insideRoom(f, g);
 	if (modelInfo(f)?.mount === 'ceiling') return { doors: [], overlap: [], outside, bad: outside };
-	const pts = samplePoints(f, 5);
 	const support = supportOf(f, all);
+	const z = elevation(f, all);
 	const doors = g.doors
 		.filter(
 			(dr) =>
 				dr.inward &&
-				pts.some((p) => {
-					const v = [p[0] - dr.hinge[0], p[1] - dr.hinge[1]];
-					return (
-						Math.hypot(v[0], v[1]) < dr.w - 0.5 &&
-						v[0] * dr.closed[0] + v[1] * dr.closed[1] > 0.5 &&
-						v[0] * dr.open[0] + v[1] * dr.open[1] > 0.5
-					);
-				})
+				footprint(f)
+					.filter((b) => z + b.y0 < dr.h)
+					.flatMap((b) => samplePoints(f, b, 5))
+					.some((p) => {
+						const v = [p[0] - dr.hinge[0], p[1] - dr.hinge[1]];
+						return (
+							Math.hypot(v[0], v[1]) < dr.w - 0.5 &&
+							v[0] * dr.closed[0] + v[1] * dr.closed[1] > 0.5 &&
+							v[0] * dr.open[0] + v[1] * dr.open[1] > 0.5
+						);
+					})
 		)
 		.map((dr) => dr.name);
 	const overlap = all
@@ -152,11 +203,11 @@ export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): Fur
 				o !== support &&
 				supportOf(o, all) !== f &&
 				modelInfo(o)?.mount !== 'ceiling' &&
-				overlaps(f, o)
+				overlaps(f, o, z, elevation(o, all))
 		)
 		.map((o) => o.name || 'Box');
 	const radiator = radiatorBox(g);
-	if (radiator && !support && overlaps(f, radiator)) overlap.push(radiator.name);
+	if (radiator && !support && overlaps(f, radiator, z)) overlap.push(radiator.name);
 	return { doors, overlap, outside, bad: outside || doors.length > 0 || overlap.length > 0 };
 }
 

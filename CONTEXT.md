@@ -17,8 +17,12 @@ One item of the **Inventory**. Its size and color are fixed; a **Design** only d
 _Avoid_: item, object, furniture (as a count noun)
 
 **Packet**:
-A **Piece** made of several things that always stand together, e.g. a desk with its chair and monitor, or an e-piano on its stand with a stool. It moves and turns as one, and its footprint is the box around all its parts.
+A **Piece** made of several things that always stand together, e.g. a desk with its chair and monitor, or an e-piano on its stand with a stool. It moves and turns as one, and its **Footprint** is one box around all its parts.
 _Avoid_: group, set, bundle
+
+**Footprint**:
+The boxes a **Piece** takes up, each a rectangle on the plan at a range of heights. Most **Pieces** have one. A floor lamp has its foot and, higher up, its head; a plant its pot and its leaves. The first box is the foot, where the **Piece** stands and turns.
+_Avoid_: hitbox, bounds, base
 
 **Design**:
 One **Room** plus a placement of every **Piece** of its **Inventory**, with a title. The thing that gets compared in **Duels**, shared and remixed.
@@ -33,7 +37,7 @@ A frozen snapshot of a **Draft**, readable by anyone with its link. It never cha
 _Avoid_: post, submission, entry
 
 **Conflict**:
-A piece of furniture that sticks out of the **Room**, overlaps another piece or blocks a door. A **Draft** with any **Conflict** cannot be published.
+A piece of furniture that sticks out of the **Room**, overlaps another piece at the same height or blocks a door. Every box of its **Footprint** counts: a floor lamp's head may reach over the bed, but not through a wall or into the wardrobe. A **Draft** with any **Conflict** cannot be published.
 _Avoid_: error, issue, collision
 
 **Remix**:

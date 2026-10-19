@@ -8,16 +8,16 @@ import type { Furniture, RoomConfig } from './types';
  * Piece stands, so changing anything here (measurements, sizes, colors, pieces) needs a new
  * ROOM_ID, which starts a fresh Leaderboard.
  */
-export const ROOM_ID = 'clemens-v2';
+export const ROOM_ID = 'clemens-v3';
 
 /** Real colors (sRGB hex) as seen from above, for the blocks in Furnish and the icons */
 const WHITE = 0xf1efea;
 const BLACK = 0x232324;
 const SILVER = 0xc7c9cc;
 const NAVY = 0x1c2741;
-const OAK = 0xc4a07a;
 const PALE_OAK = 0xdecfb6;
 const RATTAN = 0x8b5e3c;
+const LEAF = 0x3f6b46;
 
 /** Room inputs in cm. Origin is the top-left inner corner, y grows towards the loggia. */
 export const ROOM: RoomConfig = {
@@ -88,7 +88,10 @@ const fromModel = (id: string, name: string, model: string, color: number): Piec
 	name,
 	kind: MODELS[model].kind,
 	...MODELS[model].size,
-	...(MODELS[model].base && { w: MODELS[model].base.w, d: MODELS[model].base.d }),
+	...(MODELS[model].footprint && {
+		w: MODELS[model].footprint[0].w,
+		d: MODELS[model].footprint[0].d
+	}),
 	color,
 	model
 });
@@ -143,8 +146,6 @@ const STAND_H = MODELS['keyboard-stand'].size.h;
 export const INVENTORY: Piece[] = [
 	{ id: 'bed', name: 'Boxspring bed', kind: 'bed', w: 140, d: 210, h: 50, color: NAVY },
 	{ id: 'wardrobe', name: 'Wardrobe', kind: 'wardrobe', w: 150, d: 70, h: 218, color: PALE_OAK },
-	{ id: 'desk', name: 'Desk', kind: 'desk', w: 125, d: 50, h: 78, color: OAK },
-	{ id: 'chair', name: 'Office chair', kind: 'chair', w: 62, d: 62, h: 105, color: BLACK },
 	packet(
 		'workstation',
 		'Workstation',
@@ -205,7 +206,7 @@ export const INVENTORY: Piece[] = [
 			color: BLACK
 		}
 	]),
-	fromModel('flipchart', 'Flipchart', 'flipchart', WHITE),
+	fromModel('monstera', 'Monstera', 'monstera', LEAF),
 	fromModel('kallax', 'Kallax', 'ikea-kallax', WHITE),
 	{ id: 'nightstand', name: 'Nightstand', kind: 'nightstand', w: 38, d: 43, h: 63, color: WHITE },
 	fromModel('nymo-lamp', 'Nymo lamp', 'ikea-nymo-lamp', BLACK),

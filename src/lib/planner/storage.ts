@@ -5,6 +5,12 @@ const KEY = 'room-planner-v1';
 const VIEW_KEY = KEY + '-view';
 const STEP_KEY = KEY + '-step';
 
+/**
+ * Rooms whose Drafts carry over into this one: same walls, so the Pieces still in the Inventory
+ * keep their place. clemens-v2 had a desk, office chair and flipchart, and no Monstera.
+ */
+const CARRY_OVER = new Set([ROOM_ID, 'clemens-v2']);
+
 export const clone = <T>(o: T): T => JSON.parse(JSON.stringify(o));
 
 /** The Published Design a Draft was remixed from, for "Remix of X by Y". */
@@ -57,8 +63,8 @@ export function loadDraft(): Draft {
 		const raw = localStorage.getItem(KEY);
 		if (raw) {
 			const d = JSON.parse(raw);
-			// A Draft of an older Room (other Inventory) starts over from the default arrangement
-			if (d.schema === 2 && d.roomId === ROOM_ID) {
+			// A Draft of any other Room starts over from the default arrangement
+			if (d.schema === 2 && CARRY_OVER.has(d.roomId)) {
 				const remixedFrom = parseRemix(d.remixedFrom);
 				return {
 					placements: parsePlacements(d.placements, true),

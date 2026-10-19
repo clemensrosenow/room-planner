@@ -4,6 +4,7 @@ import {
 	checkFurniture,
 	describeCheck,
 	elevation,
+	footprint,
 	insideRoom,
 	keepInside,
 	supportOf
@@ -72,8 +73,8 @@ describe('checkFurniture: overlapping another Piece is a Conflict', () => {
 
 	it('not when the Pieces only touch', () => {
 		const stand = piece('nightstand', mid.x, mid.y);
-		const desk = INVENTORY.find((p) => p.id === 'desk')!;
-		const beside = piece('desk', mid.x - nightstand.w / 2 - desk.w / 2, mid.y);
+		const kallax = INVENTORY.find((p) => p.id === 'kallax')!;
+		const beside = piece('kallax', mid.x - nightstand.w / 2 - kallax.w / 2, mid.y);
 		const all = [stand, beside];
 		expect(check(stand, all).overlap).toEqual([]);
 		expect(check(beside, all).overlap).toEqual([]);
@@ -274,9 +275,55 @@ describe('conflictIds', () => {
 		const furn = designFurniture({
 			nightstand: { cx: mid.x, cy: mid.y, rot: 0 },
 			wardrobe: { cx: mid.x, cy: mid.y, rot: 0 },
-			desk: { cx: ROOM.NW / 2, cy: ROOM.N / 2, rot: 0 }
+			kallax: { cx: ROOM.NW / 2, cy: ROOM.N / 2, rot: 0 }
 		});
-		expect(conflictIds(furn)).toEqual(['wardrobe', 'desk', 'nightstand']);
+		expect(conflictIds(furn)).toEqual(['wardrobe', 'kallax', 'nightstand']);
 		expect(conflictIds([piece('nightstand', mid.x, mid.y)])).toEqual([]);
+	});
+});
+
+describe('checkFurniture: a Piece with a Footprint of several boxes', () => {
+	// Floor lamp at rot 0: a 48 cm foot up to 150 cm, the head from 150 cm reaching far right
+	// (+x) and back (-y) of the foot
+	const lamp = (cx: number, cy: number) => piece('floor-lamp', cx, cy);
+
+	it('a floor lamp whose head reaches over the bed has no Conflict', () => {
+		const f = lamp(mid.x, mid.y);
+		const bed = piece('bed', mid.x + 25 + 70, mid.y - 50);
+		expect(check(f, [f, bed])).toMatchObject({ overlap: [], bad: false });
+		expect(check(bed, [f, bed]).bad).toBe(false);
+	});
+
+	it('a floor lamp whose head reaches into the wardrobe is a Conflict', () => {
+		const f = lamp(mid.x, mid.y);
+		const wardrobe = piece('wardrobe', mid.x + 25 + 75, mid.y - 50);
+		expect(check(f, [f, wardrobe]).overlap).toEqual(['Wardrobe']);
+	});
+
+	it('a floor lamp whose head reaches through a wall sticks out of the Room', () => {
+		const f = lamp(ROOM.W - 30, mid.y);
+		expect(check(f)).toMatchObject({ outside: true, bad: true });
+	});
+
+	it('a floor lamp whose head hangs into the room door swing blocks it', () => {
+		const [dx, dy] = [roomDoor.closed[0] + roomDoor.open[0], roomDoor.closed[1] + roomDoor.open[1]];
+		const r = (0.45 * roomDoor.w) / Math.hypot(dx, dy);
+		const head = footprint(lamp(0, 0))[1];
+		const f = lamp(roomDoor.hinge[0] + dx * r - head.x, roomDoor.hinge[1] + dy * r - head.y);
+		expect(check(f).doors).toContain(roomDoor.name);
+	});
+
+	it('a Monstera whose leaves reach over the bed is a Conflict', () => {
+		const monstera = INVENTORY.find((p) => p.id === 'monstera')!;
+		const f = piece('monstera', mid.x, mid.y);
+		const bed = piece('bed', mid.x + monstera.w / 2 + 1 + 70, mid.y);
+		expect(check(f, [f, bed]).overlap).toEqual(['Boxspring bed']);
+	});
+
+	it('keepInside pulls a floor lamp in until its head is inside the walls', () => {
+		const f = lamp(ROOM.W - 30, mid.y);
+		expect(keepInside(f, GEO)).toBe(true);
+		expect(insideRoom(f, GEO)).toBe(true);
+		expect(bbox(f).maxX).toBeCloseTo(ROOM.W);
 	});
 });
