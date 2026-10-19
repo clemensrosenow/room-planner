@@ -16,7 +16,7 @@
 
 <button
 	class={[
-		'grid size-9 flex-none cursor-pointer place-items-center rounded-full transition-colors disabled:cursor-default disabled:opacity-35',
+		'grid size-9 flex-none cursor-pointer place-items-center rounded-full transition-colors disabled:cursor-default disabled:opacity-35 pointer-coarse:size-11',
 		pressed
 			? 'bg-accent-soft text-accent'
 			: tone === 'danger'

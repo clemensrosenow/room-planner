@@ -39,8 +39,18 @@
 		const h = g.L + g.tE + g.D + 15 + 70 - minY;
 		return { minX, minY, w, h, maxY: minY + h };
 	});
+	/** Touch zoom (1 = whole room) and the shown center's offset from the room's, in cm */
+	let zoom = $state(1);
+	let pan = $state<Point>([0, 0]);
+	const shown = $derived({
+		x: vb.minX + (vb.w - vb.w / zoom) / 2 + pan[0],
+		y: vb.minY + (vb.h - vb.h / zoom) / 2 + pan[1],
+		w: vb.w / zoom,
+		h: vb.h / zoom
+	});
+
 	// Font sizes and tick size in plan units, so they look constant on screen
-	const scale = $derived(Math.min((width || 600) / vb.w, (height || 500) / vb.h));
+	const scale = $derived(Math.min((width || 600) / vb.w, (height || 500) / vb.h) * zoom);
 
 	const fs = $derived(11.5 / scale);
 	const fsS = $derived(10.5 / scale);
@@ -144,7 +154,7 @@
 	// Tell the page where the selected piece is on screen, for the floating toolbar
 	$effect(() => {
 		const f = sel;
-		void [f?.cx, f?.cy, f?.w, f?.d, f?.rot, width, height, vb];
+		void [f?.cx, f?.cy, f?.w, f?.d, f?.rot, width, height, vb, shown];
 		if (!f || !svg || !wrap) return onanchor?.(null);
 		const m = svg.getScreenCTM();
 		if (!m) return;
@@ -174,20 +184,108 @@
 	/* ---------- Dragging ---------- */
 	type Drag =
 		| { mode: 'move'; f: Furniture; x: number; y: number; cx: number; cy: number }
-		| { mode: 'rotate'; f: Furniture };
+		| { mode: 'rotate'; f: Furniture; rot: number };
 	let drag: Drag | null = null;
+
+	/*
+	 * Touch: a tap selects, only the selected piece moves, one finger elsewhere pans a zoomed plan,
+	 * two fingers pinch-zoom and pan. The mouse keeps press-to-drag on any piece.
+	 */
+	const touches = new Map<number, { x: number; y: number }>();
+	let tap: { x: number; y: number; id: string | null } | null = null;
+	/** Finger(s) at the start of a pan or pinch, with the zoom and pan then */
+	let gesture: { mid: Point; dist: number; zoom: number; pan: Point } | null = null;
+
+	const fingers = () => {
+		const [a, b] = [...touches.values()];
+		return b
+			? { mid: [(a.x + b.x) / 2, (a.y + b.y) / 2] as Point, dist: Math.hypot(a.x - b.x, a.y - b.y) }
+			: { mid: [a.x, a.y] as Point, dist: 0 };
+	};
+	const startGesture = () => {
+		const { mid, dist } = fingers();
+		gesture = { mid, dist, zoom, pan: [...pan] };
+	};
+
+	/** Keeps a zoomed plan from sliding the room out of view. */
+	function setView(k: number, p: Point) {
+		zoom = Math.min(Math.max(k, 1), 5);
+		const mx = (vb.w - vb.w / zoom) / 2;
+		const my = (vb.h - vb.h / zoom) / 2;
+		pan = [Math.min(Math.max(p[0], -mx), mx), Math.min(Math.max(p[1], -my), my)];
+	}
+
+	function moveGesture() {
+		if (!gesture) return;
+		const { mid, dist } = fingers();
+		const k = gesture.dist && dist ? (gesture.zoom * dist) / gesture.dist : gesture.zoom;
+		// Screen px per cm at both zooms; the plan point under the first midpoint follows the fingers
+		const base = scale / zoom;
+		const r = wrap!.getBoundingClientRect();
+		const cx = r.left + r.width / 2;
+		const cy = r.top + r.height / 2;
+		const kk = Math.min(Math.max(k, 1), 5);
+		const at = [
+			gesture.pan[0] + (gesture.mid[0] - cx) / (base * gesture.zoom),
+			gesture.pan[1] + (gesture.mid[1] - cy) / (base * gesture.zoom)
+		];
+		setView(kk, [at[0] - (mid[0] - cx) / (base * kk), at[1] - (mid[1] - cy) / (base * kk)]);
+	}
 
 	function toPlan(e: PointerEvent): Point {
 		const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg!.getScreenCTM()!.inverse());
 		return [p.x, p.y];
 	}
 
+	function ontouchdown(e: PointerEvent) {
+		touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		(e.currentTarget as Element).setPointerCapture(e.pointerId);
+		e.preventDefault();
+		if (touches.size > 1) {
+			// Two fingers move the view, never a piece: undo what the first finger did
+			if (drag?.mode === 'move') planner.move(drag.f.id, drag.cx, drag.cy, false);
+			else if (drag?.mode === 'rotate') drag.f.rot = drag.rot;
+			drag = null;
+			live = '';
+			tap = null;
+			startGesture();
+			return;
+		}
+		const target = e.target as Element;
+		const handle = target.closest<SVGElement>('[data-handle]')?.dataset.handle;
+		const id = target.closest<SVGElement>('[data-fid]')?.dataset.fid ?? null;
+		tap = { x: e.clientX, y: e.clientY, id };
+		if (handle && sel) {
+			drag = { mode: 'rotate', f: sel, rot: sel.rot };
+		} else if (id && id === sel?.id) {
+			const [x, y] = toPlan(e);
+			drag = { mode: 'move', f: sel, x, y, cx: sel.cx, cy: sel.cy };
+		} else {
+			startGesture();
+		}
+	}
+
+	function ontouchup(e: PointerEvent, cancelled: boolean) {
+		touches.delete(e.pointerId);
+		if (tap && !cancelled && touches.size === 0) {
+			if (tap.id && planner.furn.some((f) => f.id === tap!.id)) selectItem(tap.id);
+			else if (!drag || drag.mode !== 'rotate') selectItem(null);
+		}
+		tap = null;
+		drag = null;
+		live = '';
+		// The finger left on the screen goes on panning
+		if (touches.size) startGesture();
+		else gesture = null;
+	}
+
 	function onpointerdown(e: PointerEvent) {
 		if (!editable) return;
+		if (e.pointerType === 'touch') return ontouchdown(e);
 		const target = e.target as Element;
 		const handle = target.closest<SVGElement>('[data-handle]')?.dataset.handle;
 		if (handle && sel) {
-			drag = { mode: 'rotate', f: sel };
+			drag = { mode: 'rotate', f: sel, rot: sel.rot };
 		} else {
 			const el = target.closest<SVGElement>('[data-fid]');
 			const f = el && planner.furn.find((x) => x.id === el.dataset.fid);
@@ -204,6 +302,12 @@
 	}
 
 	function onpointermove(e: PointerEvent) {
+		if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
+			touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+			// Moved too far for a tap
+			if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) >= 8) tap = null;
+			if (gesture) return moveGesture();
+		}
 		if (!drag) return;
 		const [x, y] = toPlan(e);
 		if (drag.mode === 'move') {
@@ -216,7 +320,8 @@
 		}
 	}
 
-	function onpointerup() {
+	function onpointerup(e: PointerEvent) {
+		if (e.pointerType === 'touch') return ontouchup(e, false);
 		drag = null;
 		live = '';
 	}
@@ -230,13 +335,13 @@
 	{onpointerdown}
 	{onpointermove}
 	{onpointerup}
-	onpointercancel={onpointerup}
+	onpointercancel={(e) => (e.pointerType === 'touch' ? ontouchup(e, true) : onpointerup(e))}
 	role="presentation"
 >
 	<svg
 		bind:this={svg}
 		class={['block h-full w-full', !editable && 'readonly']}
-		viewBox="{vb.minX} {vb.minY} {vb.w} {vb.h}"
+		viewBox="{shown.x} {shown.y} {shown.w} {shown.h}"
 		preserveAspectRatio="xMidYMid meet"
 		role="img"
 		aria-label="Floor plan of the room"
@@ -529,6 +634,8 @@
 					x2="0"
 					y2={-knob}
 				/>
+				<!-- Fingertip-sized hit area on touch screens -->
+				<circle class="knob-hit" data-handle="rotate" cx="0" cy={-knob} r={22 / scale} />
 				<circle
 					class="knob"
 					data-handle="rotate"
@@ -692,6 +799,15 @@
 	.knob {
 		fill: var(--accent);
 		cursor: grab;
+	}
+	.knob-hit {
+		display: none;
+		fill: transparent;
+	}
+	@media (pointer: coarse) {
+		.knob-hit {
+			display: inline;
+		}
 	}
 	.knob-line {
 		stroke: var(--accent);
