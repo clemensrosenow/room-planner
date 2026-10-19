@@ -36,6 +36,13 @@ export class RoomScene {
 	private furnGroup = new THREE.Group();
 	/** Furniture objects by id, for picking and fast position updates */
 	private pieces = new Map<string, THREE.Group>();
+	/** Parts of each piece that selection and Conflicts restyle in place */
+	private looks = new Map<string, Look>();
+	/** Selection and Conflicts last shown, applied again after a rebuild */
+	private marks: { checks: Record<string, FurnitureCheck>; selectedId: string | null } = {
+		checks: {},
+		selectedId: null
+	};
 	private resizeObserver: ResizeObserver;
 	private frame = 0;
 	/** The view changed since the last frame; a still view isn't drawn again */
@@ -45,8 +52,10 @@ export class RoomScene {
 	private selected: { id: string; h: number } | null = null;
 	/** Ceiling height, where ceiling lamps hang */
 	private ceilingH = 250;
-	/** Last furniture shown, rebuilt once a real model has loaded */
-	private last: Parameters<RoomScene['setFurniture']> | null = null;
+	/** Last furniture shown, rebuilt once its real models have loaded */
+	private last: Furniture[] | null = null;
+	/** Counts setFurniture calls, so only the latest one rebuilds after its models load */
+	private builds = 0;
 	private lastAnchor = '';
 	private glowTexture: THREE.Texture | null = null;
 
@@ -331,7 +340,7 @@ export class RoomScene {
 		this.sun.target.position.set(g.W / 2, 0, g.L / 2);
 		this.scene.background = color('--scene');
 		// Ceiling lamps follow the ceiling height
-		if (this.last) this.setPositions(this.last[0]);
+		if (this.last) this.setPositions(this.last);
 	}
 
 	private gridTexture() {
@@ -374,70 +383,111 @@ export class RoomScene {
 
 	/* ---------- Furniture ---------- */
 
-	/** Rebuilds all furniture meshes (call when size, color, name, selection or checks change). */
-	setFurniture(
-		furn: Furniture[],
-		checks: Record<string, FurnitureCheck>,
-		selectedId: string | null
-	) {
+	/**
+	 * Rebuilds all furniture meshes (call when pieces come or go, or a size, color, name or model
+	 * changes). Selection and Conflicts are restyled in place by setMarks.
+	 */
+	setFurniture(furn: Furniture[]) {
 		this.invalidate(true);
 		disposeGroup(this.furnGroup);
 		this.pieces.clear();
-		this.last = [furn, checks, selectedId];
-		const accent = color('--accent');
-		const warn = color('--warn');
+		this.looks.clear();
+		this.last = furn;
+		const build = ++this.builds;
 		const ink = color('--wall');
-		const sel = furn.find((f) => f.id === selectedId);
-		this.selected = sel ? { id: sel.id, h: sel.h + this.baseY(sel, furn) } : null;
 		const kit = new MaterialKit();
+		// Real models still loading: their stand-ins are swapped in one rebuild once all settle
+		const missing = new Set<string>();
 		for (const f of furn) {
-			const isSel = selectedId === f.id;
-			const bad = checks[f.id]?.bad;
 			const geo = new THREE.BoxGeometry(f.w, f.h, f.d);
 			const mat = new THREE.MeshStandardMaterial({
 				color: new THREE.Color(f.color),
 				roughness: 0.8
 			});
-			if (isSel || bad) {
-				mat.emissive = (bad ? warn : accent).clone();
-				mat.emissiveIntensity = bad ? 0.3 : 0.22;
-			}
 			const mesh = new THREE.Mesh(geo, mat);
 			mesh.position.y = f.h / 2;
 			mesh.castShadow = mesh.receiveShadow = true;
-			const edges = new THREE.LineSegments(
-				new THREE.EdgesGeometry(geo),
-				new THREE.LineBasicMaterial({ color: bad ? warn : isSel ? accent : ink })
-			);
+			const edgeMat = new THREE.LineBasicMaterial({ color: ink });
+			const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
 			edges.position.y = f.h / 2;
 			const piece = new THREE.Group();
 			piece.add(mesh, edges);
+			let boxShown = true;
 			// Real model, or a packet's parts: shown instead of the box, which stays as an invisible
 			// hit area. Packets show parametric stand-ins for parts that are still loading.
 			const info = modelInfo(f);
 			if (info || f.parts) {
 				const loading: string[] = [];
 				const model = buildPiece(f, kit, loading);
-				for (const id of loading)
-					loadModel(id).then((ok) => ok && this.last && this.setFurniture(...this.last));
+				for (const id of loading) missing.add(id);
 				if (f.parts || !loading.length) {
 					model.position.y = info?.mount === 'ceiling' ? f.h : 0;
 					piece.add(model);
 					mat.colorWrite = mat.depthWrite = false;
 					mesh.castShadow = mesh.receiveShadow = false;
-					edges.visible = isSel || !!bad;
+					boxShown = false;
 				}
 			}
-			// Name only on the selected piece, the room stays calm
-			if (isSel) {
-				const label = labelSprite(f.name || 'Box', 14, true);
-				label.position.y = f.h + 16;
-				if (modelInfo(f)?.mount === 'ceiling') label.position.y = -16;
-				piece.add(label);
+			piece.userData.fid = f.id;
+			mesh.userData.fid = f.id;
+			this.furnGroup.add(piece);
+			this.pieces.set(f.id, piece);
+			this.looks.set(f.id, { mat, edgeMat, edges, boxShown, label: null, glow: null });
+		}
+		this.applyMarks(furn);
+		this.setPositions(furn);
+
+		// loadModel never rejects; a model that failed stays a stand-in and brings no rebuild
+		if (missing.size)
+			Promise.all([...missing].map(loadModel)).then((ok) => {
+				if (ok.some(Boolean) && this.builds === build) this.setFurniture(furn);
+			});
+	}
+
+	/** Shows the selection and the Conflicts without rebuilding the pieces. */
+	setMarks(furn: Furniture[], checks: Record<string, FurnitureCheck>, selectedId: string | null) {
+		this.marks = { checks, selectedId };
+		this.applyMarks(furn);
+	}
+
+	private applyMarks(furn: Furniture[]) {
+		this.invalidate();
+		const { checks, selectedId } = this.marks;
+		const accent = color('--accent');
+		const warn = color('--warn');
+		const ink = color('--wall');
+		const sel = furn.find((f) => f.id === selectedId && this.pieces.has(f.id));
+		this.selected = sel ? { id: sel.id, h: sel.h + this.baseY(sel, furn) } : null;
+		for (const f of furn) {
+			const look = this.looks.get(f.id);
+			const piece = this.pieces.get(f.id);
+			if (!look || !piece) continue;
+			const isSel = selectedId === f.id;
+			const bad = !!checks[f.id]?.bad;
+			if (isSel || bad) {
+				look.mat.emissive.copy(bad ? warn : accent);
+				look.mat.emissiveIntensity = bad ? 0.3 : 0.22;
+			} else {
+				look.mat.emissive.setHex(0);
+				look.mat.emissiveIntensity = 1;
 			}
+			look.edgeMat.color.copy(bad ? warn : isSel ? accent : ink);
+			look.edges.visible = look.boxShown || isSel || bad;
+
+			// Name only on the selected piece, the room stays calm
+			if (isSel && !look.label) {
+				look.label = labelSprite(f.name || 'Box', 14, true);
+				look.label.position.y = modelInfo(f)?.mount === 'ceiling' ? -16 : f.h + 16;
+				piece.add(look.label);
+			} else if (!isSel && look.label) {
+				piece.remove(look.label);
+				disposeGroup(look.label);
+				look.label = null;
+			}
+
 			// Soft red glow on the floor around pieces with a problem
-			if (bad) {
-				const glow = new THREE.Mesh(
+			if (bad && !look.glow) {
+				look.glow = new THREE.Mesh(
 					new THREE.PlaneGeometry(f.w + 50, f.d + 50),
 					new THREE.MeshBasicMaterial({
 						map: this.glow(),
@@ -447,17 +497,13 @@ export class RoomScene {
 						depthWrite: false
 					})
 				);
-				glow.rotation.x = -Math.PI / 2;
-				glow.position.y = 0.8 - this.baseY(f, furn);
-				glow.raycast = () => {};
-				piece.add(glow);
+				look.glow.rotation.x = -Math.PI / 2;
+				look.glow.position.y = 0.8 - this.baseY(f, furn);
+				look.glow.raycast = () => {};
+				piece.add(look.glow);
 			}
-			piece.userData.fid = f.id;
-			mesh.userData.fid = f.id;
-			this.furnGroup.add(piece);
-			this.pieces.set(f.id, piece);
+			if (look.glow) look.glow.visible = bad;
 		}
-		this.setPositions(furn);
 	}
 
 	/** Tints the swing areas of doors that furniture blocks. */
@@ -538,6 +584,9 @@ export class RoomScene {
 			const y = this.baseY(f, furn);
 			piece.position.set(f.cx, y, f.cy);
 			piece.rotation.y = (-f.rot * Math.PI) / 180;
+			// The glow stays on the floor when the piece stands on another one
+			const glow = this.looks.get(f.id)?.glow;
+			if (glow) glow.position.y = 0.8 - y;
 			if (this.selected?.id === f.id) this.selected.h = f.h + y;
 		}
 	}
@@ -674,6 +723,20 @@ export class RoomScene {
 
 /* ---------- Helpers ---------- */
 
+/** What setMarks changes on a piece. */
+interface Look {
+	/** The box: tinted when selected or in Conflict, else invisible behind a real model */
+	mat: THREE.MeshStandardMaterial;
+	edgeMat: THREE.LineBasicMaterial;
+	edges: THREE.LineSegments;
+	/** Whether the box is the visible piece (no real model, or it is still loading) */
+	boxShown: boolean;
+	/** Name label, only while selected */
+	label: THREE.Sprite | null;
+	/** Red floor glow, made on the first Conflict and hidden after */
+	glow: THREE.Mesh | null;
+}
+
 function addBox(
 	group: THREE.Group,
 	pos: [number, number, number],
@@ -730,7 +793,7 @@ function labelSprite(text: string, size: number, strong: boolean) {
 	return sp;
 }
 
-function disposeGroup(group: THREE.Group) {
+function disposeGroup(group: THREE.Object3D) {
 	group.traverse((o) => {
 		const obj = o as THREE.Mesh;
 		// Real models share geometry and materials with the loader's cache

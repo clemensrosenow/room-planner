@@ -61,21 +61,32 @@
 		untrack(() => scene?.setBlockedDoors(blockedDoors()));
 	});
 
-	// Full rebuild only when something other than the position changes
+	// Full rebuild only when pieces come or go, or a size, name, color or model changes
 	$effect(() => {
 		void styleVersion;
-		void planner.furn.map((f) => [
-			f.w,
-			f.d,
-			f.h,
-			f.name,
-			f.color,
-			f.model,
-			planner.checks[f.id]?.bad
-		]);
+		void planner.furn.map((f) => [f.id, f.w, f.d, f.h, f.name, f.color, f.model]);
+		const s = scene;
+		untrack(() => s?.setFurniture(planner.furn));
+	});
+
+	/**
+	 * Pieces with a Conflict, as a string: `checks` is new on every move, but this only changes
+	 * when a Piece starts or stops being in Conflict, e.g. while dragged across another one
+	 */
+	const conflicted = $derived(
+		planner.furn
+			.filter((f) => planner.checks[f.id]?.bad)
+			.map((f) => f.id)
+			.join('\n')
+	);
+
+	// Selection and Conflicts are restyled in place
+	$effect(() => {
+		void styleVersion;
+		void conflicted;
 		void planner.selectedId;
 		const s = scene;
-		untrack(() => s?.setFurniture(planner.furn, planner.checks, planner.selectedId));
+		untrack(() => s?.setMarks(planner.furn, planner.checks, planner.selectedId));
 	});
 
 	$effect(() => {

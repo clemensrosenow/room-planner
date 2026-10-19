@@ -39,8 +39,17 @@ function noise(size: number, base: number, spread: number, seed: number) {
 	});
 }
 
+/**
+ * Draws a texture once per session; each call returns a clone sharing its pixels. Rebuilding a
+ * scene then doesn't redraw the canvas, and disposing a clone leaves the others intact.
+ */
+function cached(draw: () => THREE.Texture) {
+	let t: THREE.Texture | null = null;
+	return () => (t ??= draw()).clone();
+}
+
 /** Oak planks, 20 cm wide, 120 cm long. The texture covers 240 × 240 cm. */
-export function woodFloor() {
+const planks = cached(() => {
 	const rnd = random(7);
 	const size = 1024;
 	const px = size / 240; // pixels per cm
@@ -78,7 +87,11 @@ export function woodFloor() {
 			x.fillRect(0, row * 20 * px, size, 1.5);
 		}
 	});
-	const map = texture(c);
+	return texture(c);
+});
+
+export function woodFloor() {
+	const map = planks();
 	map.repeat.set(1 / 240, 1 / 240);
 	return new THREE.MeshStandardMaterial({ map, roughness: 0.55, metalness: 0 });
 }
@@ -109,8 +122,10 @@ export function plaster(color = 0xf2efe9) {
 	return new THREE.MeshStandardMaterial({ color, roughness: 0.93, bumpMap, bumpScale: 0.04 });
 }
 
+const concreteGrain = cached(() => texture(noise(256, 170, 40, 11)));
+
 export function concrete() {
-	const map = texture(noise(256, 170, 40, 11));
+	const map = concreteGrain();
 	map.repeat.set(1 / 100, 1 / 100);
 	return new THREE.MeshStandardMaterial({ map, roughness: 0.9 });
 }
@@ -145,6 +160,12 @@ export const steel = () =>
  * white-stained oak, as on wardrobe sides.
  */
 export function oak(pale = false) {
+	const map = (pale ? paleOakGrain : oakGrain)();
+	map.repeat.set(1 / 120, 1 / 120);
+	return new THREE.MeshStandardMaterial({ map, roughness: 0.5 });
+}
+
+function drawOak(pale: boolean) {
 	const rnd = random(19);
 	const size = 512;
 	const c = canvas(size, (x) => {
@@ -167,10 +188,10 @@ export function oak(pale = false) {
 			x.stroke();
 		}
 	});
-	const map = texture(c);
-	map.repeat.set(1 / 120, 1 / 120);
-	return new THREE.MeshStandardMaterial({ map, roughness: 0.5 });
+	return texture(c);
 }
+const oakGrain = cached(() => drawOak(false));
+const paleOakGrain = cached(() => drawOak(true));
 
 /**
  * Mirror glass. The environment map only holds the sky, so a true mirror would reflect a dark
@@ -217,9 +238,17 @@ export function fabric(color: number) {
  * covers 16 cm.
  */
 export function wicker(color: number) {
+	const map = weaveColor();
+	const bumpMap = weaveBump();
+	map.repeat.set(1 / 16, 1 / 16);
+	bumpMap.repeat.set(1 / 16, 1 / 16);
+	return new THREE.MeshStandardMaterial({ color, map, bumpMap, bumpScale: 0.6, roughness: 0.85 });
+}
+
+const weave = () => {
 	const size = 256;
 	const cell = size / 8;
-	const c = canvas(size, (x) => {
+	return canvas(size, (x) => {
 		x.fillStyle = 'rgb(70,70,70)';
 		x.fillRect(0, 0, size, size);
 		for (let i = 0; i < 8; i++)
@@ -237,12 +266,10 @@ export function wicker(color: number) {
 				x.fillRect(x0 + 1, y0 + 1, cell - 2, cell - 2);
 			}
 	});
-	const map = texture(c);
-	const bumpMap = texture(c, false);
-	map.repeat.set(1 / 16, 1 / 16);
-	bumpMap.repeat.set(1 / 16, 1 / 16);
-	return new THREE.MeshStandardMaterial({ color, map, bumpMap, bumpScale: 0.6, roughness: 0.85 });
-}
+};
+let weaveCanvas: HTMLCanvasElement | null = null;
+const weaveColor = cached(() => texture((weaveCanvas ??= weave())));
+const weaveBump = cached(() => texture((weaveCanvas ??= weave()), false));
 
 /** Satin painted wood (cabinet fronts) in a color (sRGB hex). */
 export const lacquer = (color: number) =>
