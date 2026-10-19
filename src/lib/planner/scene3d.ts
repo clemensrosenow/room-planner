@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadModel } from '../preview/modelLoader';
 import { buildLoggiaSet, buildPiece, MaterialKit } from '../preview/models';
+import { currentScreen, isPhone } from '../preview/quality';
 import { modelInfo } from './catalog';
 import { cm, cssVar } from './format';
 import { elevation, type FurnitureCheck } from './furniture';
@@ -9,7 +10,7 @@ import { buildWalls, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
 export interface SceneEvents {
-	/** Pointer went down on a piece (start of a drag) */
+	/** Pointer went down on a piece (start of a drag), or a tap on touch screens */
 	onSelect: (id: string | null) => void;
 	/** Piece dragged to a new center; `snap` is false while Alt is held */
 	onDrag: (id: string, cx: number, cy: number, snap: boolean) => void;
@@ -37,6 +38,8 @@ export class RoomScene {
 	private pieces = new Map<string, THREE.Group>();
 	private resizeObserver: ResizeObserver;
 	private frame = 0;
+	/** The view changed since the last frame; a still view isn't drawn again */
+	private dirty = true;
 	/** Swing area materials by door name, tinted when furniture blocks the door */
 	private sectors = new Map<string, THREE.MeshBasicMaterial>();
 	private selected: { id: string; h: number } | null = null;
@@ -51,10 +54,13 @@ export class RoomScene {
 		private el: HTMLElement,
 		private events: SceneEvents
 	) {
+		const phone = isPhone(currentScreen());
 		this.renderer = new THREE.WebGLRenderer({ antialias: true });
-		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 2));
 		this.renderer.shadowMap.enabled = true;
 		this.renderer.shadowMap.type = THREE.PCFShadowMap;
+		// Shadows only change with the room and the furniture (see invalidate)
+		this.renderer.shadowMap.autoUpdate = false;
 		this.renderer.domElement.className = 'block h-full w-full touch-none';
 		el.appendChild(this.renderer.domElement);
 
@@ -66,7 +72,7 @@ export class RoomScene {
 		this.controls.maxDistance = 4000;
 
 		this.sun.castShadow = true;
-		this.sun.shadow.mapSize.set(2048, 2048);
+		this.sun.shadow.mapSize.setScalar(phone ? 1024 : 2048);
 		Object.assign(this.sun.shadow.camera, {
 			left: -700,
 			right: 700,
@@ -91,11 +97,21 @@ export class RoomScene {
 				this.lastAnchor = 'hidden';
 				return;
 			}
-			this.controls.update();
-			this.renderer.render(this.scene, this.camera);
+			// True while the camera moves, also while damping lets it glide out
+			if (this.controls.update()) this.dirty = true;
+			if (this.dirty) {
+				this.dirty = false;
+				this.renderer.render(this.scene, this.camera);
+			}
 			this.reportAnchor();
 		};
 		loop();
+	}
+
+	/** Draws the next frame, with fresh shadows when `shadows` is set. */
+	private invalidate(shadows = false) {
+		this.dirty = true;
+		if (shadows) this.renderer.shadowMap.needsUpdate = true;
 	}
 
 	dispose() {
@@ -106,6 +122,8 @@ export class RoomScene {
 		disposeGroup(this.furnGroup);
 		this.glowTexture?.dispose();
 		this.renderer.dispose();
+		// Browsers allow only a few live WebGL contexts (iOS Safari about 16): free it now
+		this.renderer.forceContextLoss();
 		this.renderer.domElement.remove();
 	}
 
@@ -115,6 +133,7 @@ export class RoomScene {
 		this.renderer.setSize(w, h, false);
 		this.camera.aspect = w / h;
 		this.camera.updateProjectionMatrix();
+		this.invalidate();
 	}
 
 	/** Looks at the room from the front left, just far enough away to fit it into the view. */
@@ -129,12 +148,14 @@ export class RoomScene {
 		this.controls.target.copy(target);
 		this.camera.position.copy(target).addScaledVector(dir, dist);
 		this.controls.update();
+		this.invalidate();
 	}
 
 	/* ---------- Room ---------- */
 
 	/** Builds the room; `dims` shows wall lengths and the loggia label. */
 	setRoom(g: Geometry, lowWalls: boolean, dims = true) {
+		this.invalidate(true);
 		const grp = this.roomGroup;
 		disposeGroup(grp);
 		this.ceilingH = g.H;
@@ -359,6 +380,7 @@ export class RoomScene {
 		checks: Record<string, FurnitureCheck>,
 		selectedId: string | null
 	) {
+		this.invalidate(true);
 		disposeGroup(this.furnGroup);
 		this.pieces.clear();
 		this.last = [furn, checks, selectedId];
@@ -440,6 +462,7 @@ export class RoomScene {
 
 	/** Tints the swing areas of doors that furniture blocks. */
 	setBlockedDoors(names: string[]) {
+		this.invalidate();
 		for (const [name, m] of this.sectors) {
 			const blocked = names.includes(name);
 			m.color = color(blocked ? '--warn' : '--accent');
@@ -508,6 +531,7 @@ export class RoomScene {
 
 	/** Cheap update for moves and rotations. */
 	setPositions(furn: Furniture[]) {
+		this.invalidate(true);
 		for (const f of furn) {
 			const piece = this.pieces.get(f.id);
 			if (!piece) continue;
@@ -524,7 +548,7 @@ export class RoomScene {
 		const ndc = new THREE.Vector2();
 		const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 		const hit = new THREE.Vector3();
-		let drag: { id: string; ox: number; oz: number } | null = null;
+		let drag: { id: string; ox: number; oz: number; x0: number; z0: number } | null = null;
 		let down: { x: number; y: number } | null = null;
 
 		const aim = (e: PointerEvent) => {
@@ -533,21 +557,86 @@ export class RoomScene {
 			ray.setFromCamera(ndc, this.camera);
 		};
 
-		el.addEventListener('pointerdown', (e) => {
-			down = { x: e.clientX, y: e.clientY };
+		const pick = (e: PointerEvent) => {
 			aim(e);
 			const meshes = [...this.pieces.values()].map((p) => p.children[0]);
 			const hits = ray.intersectObjects(meshes, false);
-			if (!hits.length || !ray.ray.intersectPlane(floor, hit)) return;
-			const id = hits[0].object.userData.fid as string;
+			if (!hits.length || !ray.ray.intersectPlane(floor, hit)) return null;
+			return hits[0].object.userData.fid as string;
+		};
+		const startDrag = (id: string) => {
 			const piece = this.pieces.get(id)!;
+			drag = {
+				id,
+				ox: piece.position.x - hit.x,
+				oz: piece.position.z - hit.z,
+				x0: piece.position.x,
+				z0: piece.position.z
+			};
+		};
+
+		el.addEventListener('pointerdown', (e) => {
+			if (e.pointerType === 'touch') return;
+			down = { x: e.clientX, y: e.clientY };
+			const id = pick(e);
+			if (!id) return;
 			this.events.onSelect(id);
-			drag = { id, ox: piece.position.x - hit.x, oz: piece.position.z - hit.z };
+			startDrag(id);
 			this.controls.enabled = false;
 			el.setPointerCapture(e.pointerId);
 		});
 
+		/*
+		 * Touch: a tap selects, only the selected piece can be dragged, a drag anywhere else orbits,
+		 * and two fingers always move the camera. Runs before OrbitControls (capture), which stays
+		 * enabled so it tracks every finger; a piece drag only switches its one-finger rotate off.
+		 */
+		const touches = new Set<number>();
+		let tap: { x: number; y: number; id: string | null } | null = null;
+		let dragPointer = -1;
+		const cancelDrag = () => {
+			if (!drag) return;
+			// Put the piece back where the gesture started
+			this.events.onDrag(drag.id, drag.x0, drag.z0, false);
+			drag = null;
+			this.controls.enableRotate = true;
+		};
+		el.addEventListener(
+			'pointerdown',
+			(e) => {
+				if (e.pointerType !== 'touch') return;
+				touches.add(e.pointerId);
+				if (touches.size > 1) {
+					tap = null;
+					cancelDrag();
+					return;
+				}
+				const id = pick(e);
+				tap = { x: e.clientX, y: e.clientY, id };
+				if (id && id === this.selected?.id) {
+					startDrag(id);
+					dragPointer = e.pointerId;
+					this.controls.enableRotate = false;
+				}
+			},
+			{ capture: true }
+		);
+		const touchEnd = (e: PointerEvent, cancelled: boolean) => {
+			if (!touches.delete(e.pointerId)) return;
+			if (drag && e.pointerId === dragPointer) {
+				drag = null;
+				this.controls.enableRotate = true;
+			}
+			if (tap && !cancelled) this.events.onSelect(tap.id);
+			tap = null;
+		};
+
 		el.addEventListener('pointermove', (e) => {
+			if (e.pointerType === 'touch') {
+				// Moved too far for a tap: an orbit or a drag
+				if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) >= 8) tap = null;
+				if (e.pointerId !== dragPointer) return;
+			}
 			if (!drag) return;
 			aim(e);
 			if (!ray.ray.intersectPlane(floor, hit)) return;
@@ -572,8 +661,14 @@ export class RoomScene {
 			);
 			if (hits.length) this.events.onOpen?.(hits[0].object.userData.fid as string);
 		});
-		el.addEventListener('pointerup', end);
-		el.addEventListener('pointercancel', () => end(null));
+		el.addEventListener('pointerup', (e) => {
+			if (e.pointerType === 'touch') touchEnd(e, false);
+			else end(e);
+		});
+		el.addEventListener('pointercancel', (e) => {
+			if (e.pointerType === 'touch') touchEnd(e, true);
+			else end(null);
+		});
 	}
 }
 

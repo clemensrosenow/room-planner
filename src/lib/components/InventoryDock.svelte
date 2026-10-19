@@ -11,7 +11,12 @@
 	 * The Pieces not placed yet, along the bottom. Click a tile to place the Piece in the middle of
 	 * the room, or drag it into the room: the Piece appears under the pointer and follows it.
 	 */
-	let { planPoint }: { planPoint: (clientX: number, clientY: number) => Point | null } = $props();
+	interface Props {
+		planPoint: (clientX: number, clientY: number) => Point | null;
+		/** True while a Piece is being dragged out of the dock */
+		dragging?: boolean;
+	}
+	let { planPoint, dragging = $bindable(false) }: Props = $props();
 
 	let dock = $state<HTMLElement>();
 	let drag: { piece: Piece; x: number; y: number; moved: boolean; placed: boolean } | null = null;
@@ -41,6 +46,7 @@
 	function onpointerdown(e: PointerEvent, piece: Piece) {
 		if (e.button !== 0) return;
 		drag = { piece, x: e.clientX, y: e.clientY, moved: false, placed: false };
+		dragging = true;
 		(e.currentTarget as Element).setPointerCapture(e.pointerId);
 	}
 
@@ -62,6 +68,7 @@
 	function onpointerup() {
 		if (drag && !drag.moved) selectItem(planner.place(drag.piece).id);
 		drag = null;
+		dragging = false;
 		ghost = null;
 	}
 </script>

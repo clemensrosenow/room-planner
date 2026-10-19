@@ -11,8 +11,15 @@
 				let last = '';
 				let frame = 0;
 				const measure = () => {
-					const r = document.querySelector(selector)?.getBoundingClientRect();
-					const visible = r && r.width > 0 && r.height > 0 ? r : null;
+					// Several elements can carry the same target (the toolbar floats on desktop and is docked on phones): use the visible one
+					let visible: DOMRect | null = null;
+					for (const el of document.querySelectorAll(selector)) {
+						const r = el.getBoundingClientRect();
+						if (r.width > 0 && r.height > 0) {
+							visible = r;
+							break;
+						}
+					}
 					const key = visible ? `${visible.x},${visible.y},${visible.width},${visible.height}` : '';
 					if (key !== last) {
 						last = key;

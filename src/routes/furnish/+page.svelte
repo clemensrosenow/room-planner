@@ -26,6 +26,8 @@
 	let lowWalls = $state(false);
 	let showDims = $state(false);
 	let listOpen = $state(false);
+	/** A Piece is on its way from the dock into the room */
+	let dockDragging = $state(false);
 	let scene3d = $state<Scene3D>();
 	let planView = $state<PlanView>();
 
@@ -166,11 +168,11 @@
 		{/if}
 
 		{#if planner.selected && anchor}
-			<!-- Quick actions float above the selected piece, kept inside the view -->
+			<!-- Quick actions float above the selected piece, kept inside the view; docked on phones -->
 			<div
 				transition:scale={{ start: 0.92, duration: duration(140) }}
 				data-hint="toolbar"
-				class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full"
+				class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full max-md:hidden"
 				style:left="{Math.min(Math.max(anchor.x, 170), canvasW - 170)}px"
 				style:top="{Math.min(Math.max(anchor.y - 14, 150), canvasH - 110)}px"
 			>
@@ -184,6 +186,7 @@
 			<Segmented
 				label="View"
 				value={view}
+				iconsOnPhones
 				options={[
 					{ value: '3d', label: '3D', icon: 'cube' },
 					{ value: 'plan', label: 'Plan', icon: 'plan' }
@@ -231,14 +234,45 @@
 		{/if}
 	</div>
 
-	<!-- On phones the details sheet takes the space of the dock -->
+	<!--
+		On phones the details sheet takes the space of the dock, and so do the selected Piece's
+		actions; undo and redo sit above them, as the header has no room for them there
+	-->
 	<div
 		class={[
-			'pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4',
+			'pointer-events-none absolute inset-x-0 bottom-4 z-10 flex flex-col items-center gap-2 px-4',
 			details && 'max-md:hidden'
 		]}
 	>
-		<InventoryDock {planPoint} />
+		<div class="self-end sm:hidden">
+			<FloatingBar label="History">
+				<IconButton
+					icon="undo"
+					label="Undo"
+					disabled={!planner.canUndo}
+					onclick={() => planner.undo()}
+				/>
+				<IconButton
+					icon="redo"
+					label="Redo"
+					disabled={!planner.canRedo}
+					onclick={() => planner.redo()}
+				/>
+			</FloatingBar>
+		</div>
+		{#if planner.selected && !dockDragging}
+			<div class="md:hidden" data-hint="toolbar" transition:fly={{ y: 8, duration: duration(140) }}>
+				<SelectionToolbar f={planner.selected} ondetails={() => openDetails()} docked />
+			</div>
+		{/if}
+		<div
+			class={[
+				'flex max-w-full justify-center',
+				planner.selected && !dockDragging && 'max-md:hidden'
+			]}
+		>
+			<InventoryDock {planPoint} bind:dragging={dockDragging} />
+		</div>
 	</div>
 </Workspace>
 

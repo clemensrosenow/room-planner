@@ -3,7 +3,6 @@
 	import { designFurniture } from '#lib/planner/room.ts';
 	import type { DesignData } from '#lib/social/types.ts';
 	import { fade } from 'svelte/transition';
-	import Preview from './Preview.svelte';
 	import Icon from './ui/Icon.svelte';
 
 	/**
@@ -34,7 +33,10 @@
 	aria-label="Look inside {design.title}"
 	{onclose}
 >
-	<Preview {furn} defaultShot="above" hint={false} />
+	<!-- Loaded on demand: the Duel page itself only shows plans and doesn't need three.js -->
+	{#await import('./Preview.svelte') then { default: Preview }}
+		<Preview {furn} defaultShot="above" hint={false} />
+	{/await}
 
 	<section
 		class="absolute top-4 left-4 z-10 grid w-[min(380px,calc(100vw-32px))] gap-3 rounded-3xl bg-sheet/90 p-4 shadow-float ring-1 ring-line/70 backdrop-blur-md"
