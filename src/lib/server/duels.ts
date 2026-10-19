@@ -7,17 +7,23 @@ import { db } from './db';
 import { HttpFail, loadRoom, toData, isDesignId, pgCode } from './designs';
 import { designs, duels } from './schema';
 
+/**
+ * Async so a synchronous throw from `db()` rejects the promise instead of escaping while
+ * `Promise.all`'s array is built, which would leave the already-started `loadRoom` rejection
+ * unhandled and kill the process.
+ */
+async function judgedBy(hash: string) {
+	return db()
+		.select({ designLo: duels.designLo, designHi: duels.designHi })
+		.from(duels)
+		.where(eq(duels.voterHash, hash));
+}
+
 /** The next pair this Device should judge, or why there is none (spec R3, R2 nextPair). */
 export async function nextDuel(
 	hash: string
 ): Promise<{ pair: [DesignData, DesignData] } | { pair: null; reason: NoPairReason }> {
-	const [room, judged] = await Promise.all([
-		loadRoom(ROOM_ID),
-		db()
-			.select({ designLo: duels.designLo, designHi: duels.designHi })
-			.from(duels)
-			.where(eq(duels.voterHash, hash))
-	]);
+	const [room, judged] = await Promise.all([loadRoom(ROOM_ID), judgedBy(hash)]);
 	const seen = new Set(judged.map((d) => pairKey(d.designLo, d.designHi)));
 	const candidates: DuelCandidate[] = room.rows.map((r) => {
 		const s = room.standing.get(r.id)!;
