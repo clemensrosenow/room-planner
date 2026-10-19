@@ -127,14 +127,14 @@ export function buildLoggiaSet(items: LoggiaItem[], kit: MaterialKit): THREE.Gro
 	return set;
 }
 
-/** A model with a small footprint is moved so its footprint is centered on the piece. */
+/** A model with a Footprint is moved so its foot is centered on the piece. */
 function modelOrParametric(f: Furniture, kit: MaterialKit, loading: string[]) {
 	const model = f.model ? modelClone(f.model) : null;
 	if (f.model && !model) loading.push(f.model);
 	if (!model) return buildFurniture(f, kit);
-	const base = modelInfo(f)?.base;
-	if (!base) return model;
-	model.position.set(-base.x, 0, -base.z);
+	const foot = modelInfo(f)?.footprint?.[0];
+	if (!foot) return model;
+	model.position.set(-foot.x, 0, -foot.z);
 	return new THREE.Group().add(model);
 }
 
@@ -222,30 +222,6 @@ export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 			add(frame, [w, Math.max(h, 103), head], [0, 0, -d / 2 + head / 2], 3);
 			break;
 		}
-		case 'desk': {
-			// Top on two flat side boards; drawer unit with three drawers on the left
-			const top = 2.5;
-			const board = 2;
-			const bd = Math.min(40, d);
-			const legH = h - top;
-			add(kit.oak(), [w, top, d], [0, legH, 0], 0.6);
-			const frame = kit.lacquer(f.color);
-			for (const sx of [-1, 1]) add(frame, [board, legH, bd], [sx * (w / 2 - board / 2), 0, 0]);
-			const uw = Math.min(40, w / 2);
-			const ux = -(w / 2 - board - uw / 2);
-			add(frame, [board, legH, bd], [-(w / 2 - board - uw - board / 2), 0, 0]);
-			// Drawers from 6 cm above the floor to 13 cm below the top
-			const bottom = Math.min(6, legH * 0.1);
-			const ceil = Math.max(bottom + 3, h - 13);
-			add(kit.gap(), [uw, ceil - bottom, bd - 2], [ux, bottom, -1]);
-			const dh = (ceil - bottom) / 3;
-			for (let i = 0; i < 3; i++) {
-				const y = bottom + i * dh;
-				add(frame, [uw - 0.6, dh - 0.6, 1.6], [ux, y + 0.3, bd / 2 - 0.8], 0.3);
-				add(kit.steel(), [10, 1.2, 1.6], [ux, y + dh - 4, bd / 2 + 0.8], 0.5);
-			}
-			break;
-		}
 		case 'standing-desk': {
 			// TROTTEN, all white: top on a T-leg frame with feet along the depth and a crank on the right
 			const top = 2;
@@ -306,40 +282,6 @@ export function buildFurniture(f: Furniture, kit: MaterialKit): THREE.Group {
 			add(black, [w * 0.8, 1.5, d * 0.8], [0, 0, 0], 0.6);
 			cylinder(kit.steel(), [2.5, h - 7], [0, 1.5, 0]);
 			add(kit.cloth(0x1c1c1d), [w, 6, d], [0, h - 6, 0], 2.5);
-			break;
-		}
-		case 'chair': {
-			// Black office chair: five-star base on casters, gas column, padded seat, reclined
-			// backrest and armrests
-			const black = kit.plain(0x1a1a1b, 0.55);
-			const pad = kit.cloth(0x202022);
-			const seatH = Math.min(48, h * 0.47);
-			const r = Math.min(w, d) / 2 - 2;
-			for (let i = 0; i < 5; i++) {
-				const a = (i / 5) * Math.PI * 2;
-				const spoke = add(black, [3.5, 3, r], [0, 4, 0], 1);
-				spoke.rotation.y = a;
-				spoke.position.set((Math.sin(a) * r) / 2, 5.5, (Math.cos(a) * r) / 2);
-				cylinder(black, [2.5, 4], [Math.sin(a) * (r - 1), 0, Math.cos(a) * (r - 1)]);
-			}
-			cylinder(kit.steel(), [2.5, seatH - 15], [0, 7, 0]);
-			cylinder(black, [3.5, 6], [0, 4, 0]);
-			const sw = w * 0.78;
-			const sd = d * 0.75;
-			add(black, [sw * 0.6, 3, sd * 0.6], [0, seatH - 11, 1]);
-			add(pad, [sw, 8, sd], [0, seatH - 8, 2], 3.5);
-			// Backrest leaning back 8° from a bar behind the seat
-			const backH = h - seatH - 4;
-			const bz = -d / 2 + 5;
-			add(black, [6, 4, sd / 2], [0, seatH - 10, bz + sd / 4]);
-			add(black, [6, 14, 3], [0, seatH - 8, bz]);
-			tilted(pad, [sw * 0.92, backH, 6], [seatH + 2, bz + 2], (-8 * Math.PI) / 180);
-			// Armrests on posts beside the seat
-			for (const sx of [-1, 1]) {
-				const ax = sx * (sw / 2 + 1.5);
-				add(black, [2.5, 22, 4], [ax, seatH - 6, -2]);
-				add(black, [5.5, 2.5, 24], [ax, seatH + 16, 0], 1);
-			}
 			break;
 		}
 		case 'wardrobe': {

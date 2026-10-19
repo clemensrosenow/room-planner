@@ -5,7 +5,7 @@ import { buildLoggiaSet, buildPiece, MaterialKit } from '../preview/models';
 import { currentScreen, isPhone } from '../preview/quality';
 import { modelInfo } from './catalog';
 import { cm, cssVar } from './format';
-import { elevation, type FurnitureCheck } from './furniture';
+import { elevation, footprint, type FurnitureCheck } from './furniture';
 import { buildWalls, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
@@ -399,19 +399,36 @@ export class RoomScene {
 		// Real models still loading: their stand-ins are swapped in one rebuild once all settle
 		const missing = new Set<string>();
 		for (const f of furn) {
-			const geo = new THREE.BoxGeometry(f.w, f.h, f.d);
 			const mat = new THREE.MeshStandardMaterial({
 				color: new THREE.Color(f.color),
 				roughness: 0.8
 			});
-			const mesh = new THREE.Mesh(geo, mat);
-			mesh.position.y = f.h / 2;
-			mesh.castShadow = mesh.receiveShadow = true;
 			const edgeMat = new THREE.LineBasicMaterial({ color: ink });
-			const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
-			edges.position.y = f.h / 2;
+			// Boxes higher up (an arc lamp's head, a plant's leaves) are only hinted at
+			const faintMat = new THREE.LineDashedMaterial({
+				color: ink,
+				dashSize: 3,
+				gapSize: 5,
+				transparent: true,
+				opacity: 0.3
+			});
+			// One box per Footprint box: the hit area, and the piece itself until a model replaces it
+			const boxes = new THREE.Group();
+			const edges: THREE.LineSegments[] = [];
+			for (const [i, b] of footprint(f).entries()) {
+				const geo = new THREE.BoxGeometry(b.w, b.y1 - b.y0, b.d);
+				const mesh = new THREE.Mesh(geo, mat);
+				mesh.position.set(b.x, (b.y0 + b.y1) / 2, b.y);
+				mesh.castShadow = mesh.receiveShadow = true;
+				mesh.userData.fid = f.id;
+				const line = new THREE.LineSegments(new THREE.EdgesGeometry(geo), i ? faintMat : edgeMat);
+				line.position.copy(mesh.position);
+				if (i) line.computeLineDistances();
+				boxes.add(mesh);
+				edges.push(line);
+			}
 			const piece = new THREE.Group();
-			piece.add(mesh, edges);
+			piece.add(boxes, ...edges);
 			let boxShown = true;
 			// Real model, or a packet's parts: shown instead of the box, which stays as an invisible
 			// hit area. Packets show parametric stand-ins for parts that are still loading.
@@ -424,15 +441,14 @@ export class RoomScene {
 					model.position.y = info?.mount === 'ceiling' ? f.h : 0;
 					piece.add(model);
 					mat.colorWrite = mat.depthWrite = false;
-					mesh.castShadow = mesh.receiveShadow = false;
+					for (const mesh of boxes.children) mesh.castShadow = mesh.receiveShadow = false;
 					boxShown = false;
 				}
 			}
 			piece.userData.fid = f.id;
-			mesh.userData.fid = f.id;
 			this.furnGroup.add(piece);
 			this.pieces.set(f.id, piece);
-			this.looks.set(f.id, { mat, edgeMat, edges, boxShown, label: null, glow: null });
+			this.looks.set(f.id, { mat, edgeMat, faintMat, edges, boxShown, label: null, glow: null });
 		}
 		this.applyMarks(furn);
 		this.setPositions(furn);
@@ -472,7 +488,8 @@ export class RoomScene {
 				look.mat.emissiveIntensity = 1;
 			}
 			look.edgeMat.color.copy(bad ? warn : isSel ? accent : ink);
-			look.edges.visible = look.boxShown || isSel || bad;
+			look.faintMat.color.copy(look.edgeMat.color);
+			for (const e of look.edges) e.visible = look.boxShown || isSel || bad;
 
 			// Name only on the selected piece, the room stays calm
 			if (isSel && !look.label) {
@@ -487,8 +504,14 @@ export class RoomScene {
 
 			// Soft red glow on the floor around pieces with a problem
 			if (bad && !look.glow) {
+				// Around all of the piece's boxes, not just its foot
+				const fp = footprint(f);
+				const x0 = Math.min(...fp.map((b) => b.x - b.w / 2));
+				const x1 = Math.max(...fp.map((b) => b.x + b.w / 2));
+				const z0 = Math.min(...fp.map((b) => b.y - b.d / 2));
+				const z1 = Math.max(...fp.map((b) => b.y + b.d / 2));
 				look.glow = new THREE.Mesh(
-					new THREE.PlaneGeometry(f.w + 50, f.d + 50),
+					new THREE.PlaneGeometry(x1 - x0 + 50, z1 - z0 + 50),
 					new THREE.MeshBasicMaterial({
 						map: this.glow(),
 						color: warn,
@@ -498,7 +521,7 @@ export class RoomScene {
 					})
 				);
 				look.glow.rotation.x = -Math.PI / 2;
-				look.glow.position.y = 0.8 - this.baseY(f, furn);
+				look.glow.position.set((x0 + x1) / 2, 0.8 - this.baseY(f, furn), (z0 + z1) / 2);
 				look.glow.raycast = () => {};
 				piece.add(look.glow);
 			}
@@ -608,8 +631,8 @@ export class RoomScene {
 
 		const pick = (e: PointerEvent) => {
 			aim(e);
-			const meshes = [...this.pieces.values()].map((p) => p.children[0]);
-			const hits = ray.intersectObjects(meshes, false);
+			const boxes = [...this.pieces.values()].map((p) => p.children[0]);
+			const hits = ray.intersectObjects(boxes, true);
 			if (!hits.length || !ray.ray.intersectPlane(floor, hit)) return null;
 			return hits[0].object.userData.fid as string;
 		};
@@ -706,7 +729,7 @@ export class RoomScene {
 			aim(e as PointerEvent);
 			const hits = ray.intersectObjects(
 				[...this.pieces.values()].map((p) => p.children[0]),
-				false
+				true
 			);
 			if (hits.length) this.events.onOpen?.(hits[0].object.userData.fid as string);
 		});
@@ -725,10 +748,13 @@ export class RoomScene {
 
 /** What setMarks changes on a piece. */
 interface Look {
-	/** The box: tinted when selected or in Conflict, else invisible behind a real model */
+	/** The boxes: tinted when selected or in Conflict, else invisible behind a real model */
 	mat: THREE.MeshStandardMaterial;
 	edgeMat: THREE.LineBasicMaterial;
-	edges: THREE.LineSegments;
+	/** Dashed and faint, for the boxes above the foot */
+	faintMat: THREE.LineDashedMaterial;
+	/** One outline per Footprint box, foot first */
+	edges: THREE.LineSegments[];
 	/** Whether the box is the visible piece (no real model, or it is still loading) */
 	boxShown: boolean;
 	/** Name label, only while selected */

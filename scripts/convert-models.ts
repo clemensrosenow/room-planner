@@ -40,9 +40,14 @@ import type { ConvertedModel } from '../src/lib/preview/modelIndex.ts';
 
 interface Source {
 	id: string;
-	archive: string;
+	/** Zip/rar archive in `/models`, holding `entry` */
+	archive?: string;
 	/** Model file inside the archive. */
-	entry: string;
+	entry?: string;
+	/** GLB in `/models`, used as is instead of an archive */
+	glb?: string;
+	/** Triangle budget when lower than MAX_TRIANGLES, for heavy models that read fine with less */
+	triangles?: number;
 	/** Keep only the subtree whose node name starts with this (for files holding several variants). */
 	keep?: string;
 	/** Extra scale when assimp doesn't apply the file's units (FBX). */
@@ -148,19 +153,10 @@ const SOURCES: Source[] = [
 	{ id: 'yamaha-p45', archive: 'Yamaha+P45.zip', entry: 'model.dae' },
 	{ id: 'keyboard-stand', archive: 'stand_pour_clavier.zip', entry: 'scene.gltf' },
 	{
-		id: 'flipchart',
-		archive: 'flipchart.zip',
-		entry: 'scene.gltf',
-		// The model is about twice too big and its legs spread too wide
-		resize: [{ size: { w: 70, d: 65, h: 190 } }],
-		// The board's frame is white; the legs stay metal
-		paint: [
-			{
-				parts: { materials: ['SM_Flipchart_Metal-Iron'], y: [128, 347] },
-				name: 'frame',
-				color: WHITE
-			}
-		]
+		id: 'monstera',
+		glb: 'monstera_albo.glb',
+		// Leaves only need to read as a Monstera from a few meters away
+		triangles: 12_000
 	},
 	{
 		id: 'radiator',
@@ -185,12 +181,13 @@ const io = new NodeIO()
 
 /** Unpacks the archive and lets assimp turn the entry into a GLB next to its textures. */
 function toGlb(source: Source): string {
+	if (source.glb) return join(RAW_DIR, source.glb);
 	const dir = join(WORK_DIR, source.id);
 	rmSync(dir, { recursive: true, force: true });
 	mkdirSync(dir, { recursive: true });
-	execFileSync('bsdtar', ['-xf', join(RAW_DIR, source.archive), '-C', dir]);
+	execFileSync('bsdtar', ['-xf', join(RAW_DIR, source.archive!), '-C', dir]);
 	const glb = join(dir, `${source.id}.raw.glb`);
-	execFileSync('assimp', ['export', join(dir, source.entry), glb, '-fglb2', '-jiv', '-tri'], {
+	execFileSync('assimp', ['export', join(dir, source.entry!), glb, '-fglb2', '-jiv', '-tri'], {
 		stdio: 'ignore'
 	});
 	return glb;
@@ -481,12 +478,12 @@ function replaceWithTube(doc: Document, tube: NonNullable<Source['tube']>) {
 }
 
 /** Simplifies harder until the model fits the triangle budget, loosening the error cap each round. */
-async function fitBudget(doc: Document) {
+async function fitBudget(doc: Document, budget: number) {
 	let error = 0.001;
 	for (let round = 0; round < 10; round++) {
 		const tris = renderedTriangles(doc);
-		if (tris <= MAX_TRIANGLES) return;
-		const ratio = Math.min(1, (MAX_TRIANGLES * 0.9) / tris);
+		if (tris <= budget) return;
+		const ratio = Math.min(1, (budget * 0.9) / tris);
 		await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error }));
 		error *= 2;
 	}
@@ -530,7 +527,7 @@ async function convert(source: Source) {
 	if (source.tube) replaceWithTube(doc, source.tube);
 	editMaterials(doc, source.materials);
 	await doc.transform(prune());
-	await fitBudget(doc);
+	await fitBudget(doc, Math.min(source.triangles ?? MAX_TRIANGLES, MAX_TRIANGLES));
 	const triangles = renderedTriangles(doc);
 
 	const scene = sceneOf(doc);
