@@ -16,6 +16,7 @@ import type { Furniture } from '../planner/types';
 import * as mat from './materials';
 import { loadModel, modelClone } from './modelLoader';
 import { buildLoggiaSet, buildPiece, MaterialKit } from './models';
+import { currentScreen, isPhone } from './quality';
 import type { Shot } from './shots';
 import { dayOfYear, sunDirection, sunLight } from './sun';
 import { WalkControls } from './WalkControls';
@@ -37,6 +38,8 @@ const GLIDE = 2.2; // seconds between shots
 /** Overview orbit: lowest view, measured from straight down */
 const OVERVIEW_MAX_POLAR = Math.PI * 0.3;
 const UP = new THREE.Vector3(0, 1, 0);
+/** While the camera stands still only the clouds drift, so a few frames a second are enough */
+const IDLE_FRAME_MS = 1000 / 15;
 
 /** Replaces NaN/Infinity with black and caps extreme HDR values. */
 const SanitizeShader = {
@@ -137,6 +140,13 @@ export class PreviewScene {
 	private resizeObserver: ResizeObserver;
 	private lastTime = performance.now();
 	private frame = 0;
+	/** Something other than the camera changed since the last frame */
+	private dirty = true;
+	private rendered = 0;
+	/** Camera at the last frame, to tell whether it moved */
+	private seen = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: 0 };
+	/** Phones skip ambient occlusion and use smaller shadow maps */
+	private phone = isPhone(currentScreen());
 
 	private glide: {
 		path: THREE.Vector3[];
@@ -151,9 +161,11 @@ export class PreviewScene {
 			antialias: true,
 			preserveDrawingBuffer: false
 		}));
-		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.25 : 1.5));
 		r.shadowMap.enabled = true;
 		r.shadowMap.type = THREE.PCFShadowMap;
+		// Nothing moves in the room: shadows are only redrawn after a change (see invalidate)
+		r.shadowMap.autoUpdate = false;
 		// Neutral keeps whites white and colors true, while rolling off bright windows
 		r.toneMapping = THREE.NeutralToneMapping;
 		r.toneMappingExposure = 1;
@@ -194,7 +206,7 @@ export class PreviewScene {
 		this.scene.add(this.windowLight, this.bounce);
 
 		this.sun.castShadow = true;
-		this.sun.shadow.mapSize.set(2048, 2048);
+		this.sun.shadow.mapSize.setScalar(this.phone ? 1024 : 2048);
 		Object.assign(this.sun.shadow.camera, {
 			left: -6,
 			right: 6,
@@ -208,23 +220,28 @@ export class PreviewScene {
 		this.sun.shadow.radius = 3;
 		this.scene.add(this.sun, this.sun.target);
 
-		this.lamp.castShadow = true;
-		this.lamp.shadow.mapSize.set(1024, 1024);
+		this.lamp.shadow.mapSize.setScalar(this.phone ? 512 : 1024);
 		this.lamp.shadow.radius = 4;
 		this.lamp.shadow.bias = -0.006;
 		this.lamp.shadow.normalBias = 0.03;
 		this.scene.add(this.lamp, this.floorBounce);
 
-		// HDR pipeline with 4× MSAA: render, ambient occlusion, bloom, tone mapping, vignette
+		// HDR pipeline with 4× MSAA: render, ambient occlusion, bloom, tone mapping, vignette.
+		// Phones get 2× MSAA and no ambient occlusion, which renders the whole scene once more
 		this.composer = new EffectComposer(
 			r,
-			new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 })
+			new THREE.WebGLRenderTarget(1, 1, {
+				type: THREE.HalfFloatType,
+				samples: this.phone ? 2 : 4
+			})
 		);
 		this.composer.addPass(new RenderPass(this.scene, this.camera));
-		const ao = new GTAOPass(this.scene, this.camera, 1, 1);
-		ao.updateGtaoMaterial({ radius: 0.25, distanceExponent: 1.5, thickness: 1, scale: 1 });
-		ao.blendIntensity = 0.7;
-		this.composer.addPass(ao);
+		if (!this.phone) {
+			const ao = new GTAOPass(this.scene, this.camera, 1, 1);
+			ao.updateGtaoMaterial({ radius: 0.25, distanceExponent: 1.5, thickness: 1, scale: 1 });
+			ao.blendIntensity = 0.7;
+			this.composer.addPass(ao);
+		}
 		// The sky shader can produce NaN or huge values at sunset; bloom would smear them
 		// over the whole frame, so they are cleaned up first
 		this.composer.addPass(new ShaderPass(SanitizeShader));
@@ -258,15 +275,38 @@ export class PreviewScene {
 			const now = performance.now();
 			const dt = Math.min((now - this.lastTime) / 1000, 0.1);
 			this.lastTime = now;
-			if (!this.el.offsetParent) return;
+			if (!this.el.offsetParent) {
+				this.dirty = true;
+				return;
+			}
 			this.update(dt);
 			// Seconds: the cloud speed is tuned for them. Milliseconds made the clouds race
 			// across the sky and flicker
 			this.sky.material.uniforms.time.value += dt;
 			if (this.envDirty && now - this.envUpdated > 250) this.updateEnvironment(now);
+			if (!this.cameraMoved() && !this.dirty && now - this.rendered < IDLE_FRAME_MS) return;
+			this.dirty = false;
+			this.rendered = now;
 			this.composer.render();
 		};
 		loop();
+	}
+
+	/** Draws the next frame in full, with fresh shadows when `shadows` is set. */
+	private invalidate(shadows = false) {
+		this.dirty = true;
+		if (shadows) this.renderer.shadowMap.needsUpdate = true;
+	}
+
+	/** Whether the camera moved or zoomed since the last call. */
+	private cameraMoved() {
+		const c = this.camera;
+		const s = this.seen;
+		if (c.position.equals(s.pos) && c.quaternion.equals(s.quat) && c.fov === s.fov) return false;
+		s.pos.copy(c.position);
+		s.quat.copy(c.quaternion);
+		s.fov = c.fov;
+		return true;
 	}
 
 	dispose() {
@@ -281,6 +321,8 @@ export class PreviewScene {
 		this.pmrem.dispose();
 		this.composer.dispose();
 		this.renderer.dispose();
+		// Browsers allow only a few live WebGL contexts (iOS Safari about 16): free it now
+		this.renderer.forceContextLoss();
 		this.renderer.domElement.remove();
 	}
 
@@ -292,6 +334,7 @@ export class PreviewScene {
 		this.bloom.resolution.set(w, h);
 		this.camera.aspect = w / h;
 		this.updateFov(1);
+		this.invalidate();
 	}
 
 	/**
@@ -536,8 +579,7 @@ export class PreviewScene {
 			light.position.copy(l.pos);
 			light.userData.intensity = l.intensity;
 			if (i === 0) {
-				light.castShadow = true;
-				light.shadow.mapSize.set(1024, 1024);
+				light.shadow.mapSize.setScalar(this.phone ? 512 : 1024);
 				light.shadow.radius = 4;
 				light.shadow.bias = -0.006;
 				light.shadow.normalBias = 0.03;
@@ -573,6 +615,7 @@ export class PreviewScene {
 		this.controls.minDistance = Math.max(size, (g.H / 100 + 0.5) / Math.cos(OVERVIEW_MAX_POLAR));
 		this.controls.maxDistance = Math.max(size * 2.5, this.controls.minDistance * 1.5);
 		this.updateFov(1);
+		this.invalidate(true);
 	}
 
 	/* ---------- Lighting ---------- */
@@ -615,6 +658,7 @@ export class PreviewScene {
 
 		this.daylight = light.daylight;
 		this.updateBounce();
+		this.invalidate(true);
 	}
 
 	/** Re-renders the sky into the reflection map (throttled, it costs a few ms). */
@@ -625,6 +669,7 @@ export class PreviewScene {
 		this.envTarget = this.pmrem.fromScene(this.envScene, 0.02, 0.1, 100);
 		this.scene.environment = this.envTarget.texture;
 		old?.dispose();
+		this.invalidate();
 	}
 
 	/** Switches all lights: the placed lamps, or the built-in ceiling light without any. */
@@ -632,11 +677,17 @@ export class PreviewScene {
 		this.lampOn = on;
 		const builtIn = this.lampLights.length === 0;
 		this.lamp.intensity = on && builtIn ? 18 : 0;
-		this.lamp.castShadow = builtIn;
-		for (const l of this.lampLights) l.intensity = on ? l.userData.intensity : 0;
+		// A point light's shadow draws the scene six times: only while the lights are on, and
+		// only for the brightest lamp
+		this.lamp.castShadow = on && builtIn;
+		for (const [i, l] of this.lampLights.entries()) {
+			l.intensity = on ? l.userData.intensity : 0;
+			l.castShadow = on && i === 0;
+		}
 		this.lampShade.emissiveIntensity = on ? 2.5 : 0;
 		for (const m of this.lampGlow) m.emissiveIntensity = on ? 1.2 : 0;
 		this.updateBounce();
+		this.invalidate(true);
 	}
 
 	/** Gives the model's parts with the named material their own copy that can glow. */
