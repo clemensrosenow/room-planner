@@ -9,8 +9,10 @@
 		onchange: (value: T) => void;
 		/** Stretch the options over the full width */
 		full?: boolean;
+		/** Phones show only the icons; the labels stay for screen readers */
+		iconsOnPhones?: boolean;
 	}
-	let { label, value, options, onchange, full = false }: Props = $props();
+	let { label, value, options, onchange, full = false, iconsOnPhones = false }: Props = $props();
 </script>
 
 <div
@@ -29,7 +31,7 @@
 			onclick={() => onchange(o.value)}
 		>
 			{#if o.icon}<Icon name={o.icon} size={16} />{/if}
-			{o.label}
+			<span class={[iconsOnPhones && o.icon && 'max-sm:sr-only']}>{o.label}</span>
 		</button>
 	{/each}
 </div>

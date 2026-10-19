@@ -10,7 +10,7 @@ import { buildWalls, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
 export interface SceneEvents {
-	/** Pointer went down on a piece (start of a drag) */
+	/** Pointer went down on a piece (start of a drag), or a tap on touch screens */
 	onSelect: (id: string | null) => void;
 	/** Piece dragged to a new center; `snap` is false while Alt is held */
 	onDrag: (id: string, cx: number, cy: number, snap: boolean) => void;
@@ -548,7 +548,7 @@ export class RoomScene {
 		const ndc = new THREE.Vector2();
 		const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 		const hit = new THREE.Vector3();
-		let drag: { id: string; ox: number; oz: number } | null = null;
+		let drag: { id: string; ox: number; oz: number; x0: number; z0: number } | null = null;
 		let down: { x: number; y: number } | null = null;
 
 		const aim = (e: PointerEvent) => {
@@ -557,21 +557,86 @@ export class RoomScene {
 			ray.setFromCamera(ndc, this.camera);
 		};
 
-		el.addEventListener('pointerdown', (e) => {
-			down = { x: e.clientX, y: e.clientY };
+		const pick = (e: PointerEvent) => {
 			aim(e);
 			const meshes = [...this.pieces.values()].map((p) => p.children[0]);
 			const hits = ray.intersectObjects(meshes, false);
-			if (!hits.length || !ray.ray.intersectPlane(floor, hit)) return;
-			const id = hits[0].object.userData.fid as string;
+			if (!hits.length || !ray.ray.intersectPlane(floor, hit)) return null;
+			return hits[0].object.userData.fid as string;
+		};
+		const startDrag = (id: string) => {
 			const piece = this.pieces.get(id)!;
+			drag = {
+				id,
+				ox: piece.position.x - hit.x,
+				oz: piece.position.z - hit.z,
+				x0: piece.position.x,
+				z0: piece.position.z
+			};
+		};
+
+		el.addEventListener('pointerdown', (e) => {
+			if (e.pointerType === 'touch') return;
+			down = { x: e.clientX, y: e.clientY };
+			const id = pick(e);
+			if (!id) return;
 			this.events.onSelect(id);
-			drag = { id, ox: piece.position.x - hit.x, oz: piece.position.z - hit.z };
+			startDrag(id);
 			this.controls.enabled = false;
 			el.setPointerCapture(e.pointerId);
 		});
 
+		/*
+		 * Touch: a tap selects, only the selected piece can be dragged, a drag anywhere else orbits,
+		 * and two fingers always move the camera. Runs before OrbitControls (capture), which stays
+		 * enabled so it tracks every finger; a piece drag only switches its one-finger rotate off.
+		 */
+		const touches = new Set<number>();
+		let tap: { x: number; y: number; id: string | null } | null = null;
+		let dragPointer = -1;
+		const cancelDrag = () => {
+			if (!drag) return;
+			// Put the piece back where the gesture started
+			this.events.onDrag(drag.id, drag.x0, drag.z0, false);
+			drag = null;
+			this.controls.enableRotate = true;
+		};
+		el.addEventListener(
+			'pointerdown',
+			(e) => {
+				if (e.pointerType !== 'touch') return;
+				touches.add(e.pointerId);
+				if (touches.size > 1) {
+					tap = null;
+					cancelDrag();
+					return;
+				}
+				const id = pick(e);
+				tap = { x: e.clientX, y: e.clientY, id };
+				if (id && id === this.selected?.id) {
+					startDrag(id);
+					dragPointer = e.pointerId;
+					this.controls.enableRotate = false;
+				}
+			},
+			{ capture: true }
+		);
+		const touchEnd = (e: PointerEvent, cancelled: boolean) => {
+			if (!touches.delete(e.pointerId)) return;
+			if (drag && e.pointerId === dragPointer) {
+				drag = null;
+				this.controls.enableRotate = true;
+			}
+			if (tap && !cancelled) this.events.onSelect(tap.id);
+			tap = null;
+		};
+
 		el.addEventListener('pointermove', (e) => {
+			if (e.pointerType === 'touch') {
+				// Moved too far for a tap: an orbit or a drag
+				if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) >= 8) tap = null;
+				if (e.pointerId !== dragPointer) return;
+			}
 			if (!drag) return;
 			aim(e);
 			if (!ray.ray.intersectPlane(floor, hit)) return;
@@ -596,8 +661,14 @@ export class RoomScene {
 			);
 			if (hits.length) this.events.onOpen?.(hits[0].object.userData.fid as string);
 		});
-		el.addEventListener('pointerup', end);
-		el.addEventListener('pointercancel', () => end(null));
+		el.addEventListener('pointerup', (e) => {
+			if (e.pointerType === 'touch') touchEnd(e, false);
+			else end(e);
+		});
+		el.addEventListener('pointercancel', (e) => {
+			if (e.pointerType === 'touch') touchEnd(e, true);
+			else end(null);
+		});
 	}
 }
 
