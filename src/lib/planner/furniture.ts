@@ -191,16 +191,23 @@ export function insideRoom(f: Furniture, g: Geometry) {
 }
 
 /**
- * Shifts the piece the shortest way so its bounding box lies within the walls. A piece too big
- * for the room is centered in it. Returns whether the piece moved.
+ * Shifts the piece the shortest way so its bounding box lies within the walls. Only parts of the
+ * floor the piece fits into count; a piece too big for all of them is centered in the largest.
+ * Returns whether the piece moved.
  */
 export function keepInside(f: Furniture, g: Geometry): boolean {
 	const b = bbox(f);
 	/** Shift along one axis that moves [lo, hi] into [r0, r1], centered if it doesn't fit */
 	const shift = (lo: number, hi: number, r0: number, r1: number) =>
 		hi - lo > r1 - r0 ? (r0 + r1 - lo - hi) / 2 : Math.max(0, r0 - lo) + Math.min(0, r1 - hi);
+	const rects = floorRects(g);
+	const fits = rects.filter(
+		(r) => b.maxX - b.minX <= r.x1 - r.x0 && b.maxY - b.minY <= r.y1 - r.y0
+	);
+	const area = (r: (typeof rects)[number]) => (r.x1 - r.x0) * (r.y1 - r.y0);
+	const largest = rects.reduce((a, r) => (area(r) > area(a) ? r : a));
 	let best: { dx: number; dy: number } | null = null;
-	for (const r of floorRects(g)) {
+	for (const r of fits.length ? fits : [largest]) {
 		const dx = shift(b.minX, b.maxX, r.x0, r.x1);
 		const dy = shift(b.minY, b.maxY, r.y0, r.y1);
 		if (!best || Math.hypot(dx, dy) < Math.hypot(best.dx, best.dy)) best = { dx, dy };

@@ -247,6 +247,26 @@ describe('keepInside', () => {
 		expect(keepInside(f, GEO)).toBe(false);
 		expect([f.cx, f.cy]).toEqual([mid.x, mid.y]);
 	});
+
+	// The strip where the hallway part meets the bay is narrower than the Workstation, so
+	// centering it there would leave it half in a wall
+	it('pushes a Workstation dropped in the hallway corner inside the Room', () => {
+		const f = piece('workstation', 225, 100);
+		keepInside(f, GEO);
+		expect(insideRoom(f, GEO)).toBe(true);
+	});
+
+	it('pushes a Workstation dropped in the bay inside the Room', () => {
+		const f = piece('workstation', 232, ROOM.L - 38);
+		keepInside(f, GEO);
+		expect(insideRoom(f, GEO)).toBe(true);
+	});
+
+	it('centers a Piece too big for the Room in its largest part', () => {
+		const f: Furniture = { ...piece('nightstand', 0, 0), w: ROOM.W + 40, d: 50 };
+		expect(keepInside(f, GEO)).toBe(true);
+		expect(f.cx).toBeCloseTo(ROOM.W / 2);
+	});
 });
 
 describe('conflictIds', () => {
