@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ArrivalCard from '#lib/components/ArrivalCard.svelte';
 	import { page } from '$app/state';
 	import DesignCard from '#lib/components/DesignCard.svelte';
 	import Segmented from '#lib/components/ui/Segmented.svelte';
@@ -58,6 +59,8 @@
 				onchange={(v) => setParams({ sort: v === 'new' ? 'new' : null }, { replace: true })}
 			/>
 		</div>
+
+		<ArrivalCard where="designs" />
 
 		{#if designs.length}
 			<ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

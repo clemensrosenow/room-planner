@@ -1,5 +1,7 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { ui } from '#lib/ui.svelte.ts';
+	import { untrack, type Snippet } from 'svelte';
+	import IconButton from './IconButton.svelte';
 
 	/**
 	 * Modal dialog (native <dialog>: focus trap, Esc and backdrop close it). Shown while `open`;
@@ -10,8 +12,10 @@
 		title: string;
 		onclose: () => void;
 		children: Snippet;
+		/** Show a close button next to the title */
+		closable?: boolean;
 	}
-	let { open, title, onclose, children }: Props = $props();
+	let { open, title, onclose, children, closable = false }: Props = $props();
 
 	let dialog = $state<HTMLDialogElement>();
 
@@ -19,6 +23,13 @@
 		if (!dialog) return;
 		if (open && !dialog.open) dialog.showModal();
 		else if (!open && dialog.open) dialog.close();
+	});
+
+	// Hints wait while any dialog is open
+	$effect(() => {
+		if (!open) return;
+		untrack(() => ui.modals++);
+		return () => untrack(() => ui.modals--);
 	});
 </script>
 
@@ -34,7 +45,14 @@
 >
 	{#if open}
 		<div class="grid gap-4 p-6">
-			<h2 class="text-[19px] font-bold tracking-tight">{title}</h2>
+			<div class="flex items-start justify-between gap-3">
+				<h2 class="text-[19px] font-bold tracking-tight">{title}</h2>
+				{#if closable}
+					<span class="-mt-1.5 -mr-2">
+						<IconButton icon="close" label="Close" onclick={() => dialog?.close()} />
+					</span>
+				{/if}
+			</div>
 			{@render children()}
 		</div>
 	{/if}

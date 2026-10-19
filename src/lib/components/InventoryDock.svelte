@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { duration } from '#lib/motion.ts';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Piece } from '#lib/planner/room.ts';
 	import type { Point } from '#lib/planner/types.ts';
+	import { ui } from '#lib/ui.svelte.ts';
 	import { selectItem } from '#lib/url.ts';
 	import FurnitureIcon from './FurnitureIcon.svelte';
 
@@ -20,6 +22,19 @@
 	let drag: { piece: Piece; x: number; y: number; moved: boolean; placed: boolean } | null = null;
 	/** Icon following the pointer until the Piece enters the room */
 	let ghost = $state<{ piece: Piece; x: number; y: number } | null>(null);
+
+	// A soft ring draws attention to the dock when asked (Publish with Pieces left)
+	$effect(() => {
+		const ms = duration(600);
+		if (!dock || !ms || Date.now() - ui.dockPulse > 1500) return;
+		dock.animate(
+			[
+				{ boxShadow: '0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent)' },
+				{ boxShadow: '0 0 0 14px color-mix(in srgb, var(--accent) 0%, transparent)' }
+			],
+			{ duration: ms, easing: 'ease-out' }
+		);
+	});
 
 	/** Room point under the pointer, ignoring the dock itself */
 	function roomPoint(e: PointerEvent) {
@@ -65,8 +80,9 @@
 		role="toolbar"
 		aria-label="Pieces to place"
 	>
-		{#each planner.unplaced as piece (piece.id)}
+		{#each planner.unplaced as piece, i (piece.id)}
 			<button
+				data-hint={i === 0 ? 'dock' : undefined}
 				class="flex w-[76px] flex-none cursor-grab touch-pan-x flex-col items-center gap-1 rounded-2xl px-1 pt-2 pb-1.5 text-ink transition-colors select-none hover:bg-paper active:cursor-grabbing"
 				title="Drag into the room or click to place · {piece.w} × {piece.d} cm"
 				onpointerdown={(e) => onpointerdown(e, piece)}

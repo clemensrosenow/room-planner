@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { duration } from '#lib/motion.ts';
+	import { onboarding } from '#lib/onboarding/state.svelte.ts';
 	import { fly } from 'svelte/transition';
 	import IconButton from './IconButton.svelte';
 
@@ -52,6 +53,15 @@
 					<dd class="text-muted">{text}</dd>
 				{/each}
 			</dl>
+			<button
+				class="mt-3 w-full cursor-pointer border-t border-line pt-3 text-left text-[13px] font-semibold text-accent hover:underline"
+				onclick={() => {
+					open = false;
+					onboarding.reset();
+				}}
+			>
+				Show intro again
+			</button>
 		</div>
 	{/if}
 </span>
