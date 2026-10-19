@@ -11,7 +11,6 @@
 	import { setParams } from '#lib/url.ts';
 	import { onMount } from 'svelte';
 	import PlanView from './PlanView.svelte';
-	import Preview from './Preview.svelte';
 	import ConfirmButton from './ui/ConfirmButton.svelte';
 	import Dialog from './ui/Dialog.svelte';
 	import Icon from './ui/Icon.svelte';
@@ -104,8 +103,11 @@
 
 <div class="relative h-full">
 	{#if mounted && view === '3d'}
-		<!-- Only rendered while shown; the viewpoint survives in ?shot= -->
-		<Preview {furn} defaultShot="above" hint={false} />
+		<!-- Only rendered while shown; the viewpoint survives in ?shot=. Loaded on demand, so
+		     the plan view doesn't download three.js -->
+		{#await import('./Preview.svelte') then { default: Preview }}
+			<Preview {furn} defaultShot="above" hint={false} />
+		{/await}
 	{:else if view === 'plan'}
 		<div class="absolute inset-0 pt-16 max-md:pt-64">
 			<PlanView {furn} showDims={false} />
