@@ -367,6 +367,8 @@ export class PreviewScene {
 		this.clearLamps();
 		disposeTree(this.root);
 		const grp = this.root;
+		// Real models still loading: their stand-ins are swapped in one rebuild once all settle
+		const missing = new Set<string>();
 		const wallMat = mat.plaster();
 		// Both faces cast shadows, so no sunlight leaks along wall joints
 		wallMat.shadowSide = THREE.DoubleSide;
@@ -518,9 +520,7 @@ export class PreviewScene {
 				grp.add(model);
 			} else {
 				box(grp, center, [d, r.h, w], 0, trim);
-				loadModel('radiator').then((ok) => {
-					if (ok && this.last?.furn === furn) this.build(this.last.g, furn);
-				});
+				missing.add('radiator');
 			}
 		}
 
@@ -543,10 +543,7 @@ export class PreviewScene {
 			const ceiling = info?.mount === 'ceiling';
 			const loading: string[] = [];
 			const piece = buildPiece(f, kit, loading);
-			for (const id of loading)
-				loadModel(id).then((ok) => {
-					if (ok && this.last?.furn === furn) this.build(this.last.g, furn);
-				});
+			for (const id of loading) missing.add(id);
 			const model = info && !loading.length ? piece : null;
 			piece.position.set(f.cx, ceiling ? g.H : elevation(f, furn), f.cy);
 			piece.rotation.y = (-f.rot * Math.PI) / 180;
@@ -616,6 +613,12 @@ export class PreviewScene {
 		this.controls.maxDistance = Math.max(size * 2.5, this.controls.minDistance * 1.5);
 		this.updateFov(1);
 		this.invalidate(true);
+
+		// loadModel never rejects; a model that failed stays a stand-in and brings no rebuild
+		if (missing.size)
+			Promise.all([...missing].map(loadModel)).then((ok) => {
+				if (ok.some(Boolean) && this.last?.furn === furn) this.build(this.last.g, furn);
+			});
 	}
 
 	/* ---------- Lighting ---------- */
