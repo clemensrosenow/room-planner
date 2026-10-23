@@ -12,7 +12,6 @@ export type Kind =
 	| 'monitor'
 	| 'laptop'
 	| 'piano'
-	| 'plant'
 	| 'box';
 
 /** Guess by name (English and German), first match wins. For pieces saved without a kind. */
@@ -22,7 +21,6 @@ const BY_NAME: [Kind, RegExp][] = [
 	['shelf', /shelf|book|regal|rack|kallax/i],
 	['lamp', /lamp|leuchte/i],
 	['piano', /piano|keyboard|klavier/i],
-	['plant', /plant|monstera|pflanze/i],
 	['monitor', /monitor|display|screen|bildschirm/i],
 	['laptop', /laptop|notebook/i],
 	['stool', /stool|hocker/i],
@@ -130,17 +128,6 @@ export const MODELS: Record<string, ModelInfo> = {
 		kind: 'piano',
 		size: { w: 98.1, d: 52.5, h: 67.8 },
 		mount: 'floor'
-	},
-	monstera: {
-		label: 'Monstera',
-		kind: 'plant',
-		size: { w: 95.8, d: 83.7, h: 97.7 },
-		mount: 'floor',
-		// The pot stands off the model's center; the leaves spread wide above it
-		footprint: [
-			{ x: -11, z: -1.5, w: 54, d: 33, y0: 0, y1: 20 },
-			{ x: 0, z: 0, w: 95.8, d: 83.7, y0: 20, y1: 97.7 }
-		]
 	},
 	radiator: {
 		label: 'Radiator',

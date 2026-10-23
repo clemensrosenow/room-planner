@@ -153,12 +153,6 @@ const SOURCES: Source[] = [
 	{ id: 'yamaha-p45', archive: 'Yamaha+P45.zip', entry: 'model.dae' },
 	{ id: 'keyboard-stand', archive: 'stand_pour_clavier.zip', entry: 'scene.gltf' },
 	{
-		id: 'monstera',
-		glb: 'monstera_albo.glb',
-		// Leaves only need to read as a Monstera from a few meters away
-		triangles: 12_000
-	},
-	{
 		id: 'radiator',
 		archive: 'bedroom_heater_radiator.zip',
 		entry: 'scene.gltf',

@@ -7,7 +7,7 @@ const STEP_KEY = KEY + '-step';
 
 /**
  * Rooms whose Drafts carry over into this one: same walls, so the Pieces still in the Inventory
- * keep their place. clemens-v2 had a desk, office chair and flipchart, and no Monstera.
+ * keep their place. clemens-v2 had a desk, office chair and flipchart.
  */
 const CARRY_OVER = new Set([ROOM_ID, 'clemens-v2']);
 

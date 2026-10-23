@@ -91,19 +91,6 @@
 		"bytes": 767756
 	},
 	{
-		"id": "monstera",
-		"file": "/models/monstera.glb",
-		"size": {
-			"w": 95.8,
-			"d": 83.7,
-			"h": 97.7
-		},
-		"mount": "floor",
-		"triangles": 10776,
-		"trianglesBefore": 1947384,
-		"bytes": 176872
-	},
-	{
 		"id": "radiator",
 		"file": "/models/radiator.glb",
 		"size": {
