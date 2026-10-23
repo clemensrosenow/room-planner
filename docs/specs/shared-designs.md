@@ -1,5 +1,7 @@
 # Spec: Shared Designs, Likes and Leaderboard
 
+> Superseded in part by [ux-polish.md](ux-polish.md): sharing, Publish placement and copy.
+
 Status: Ready to build · Owner: Clemens · Date: 2026-10-03
 
 Vocabulary follows [CONTEXT.md](../../CONTEXT.md). Decisions: [ADR 0001](../adr/0001-device-identity-without-accounts.md), [ADR 0002](../adr/0002-fixed-room-and-inventory.md), [ADR 0003](../adr/0003-immutable-published-designs-in-postgres.md).

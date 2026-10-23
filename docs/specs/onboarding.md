@@ -1,5 +1,7 @@
 # Spec: Onboarding
 
+> Superseded in part by [ux-polish.md](ux-polish.md): sharing, Publish placement and copy.
+
 Status: Draft · Owner: Clemens · Date: 2026-10-19
 
 Vocabulary follows [CONTEXT.md](../../CONTEXT.md). Decisions: [ADR 0001](../adr/0001-device-identity-without-accounts.md) (onboarding state belongs to the Device), [ADR 0002](../adr/0002-fixed-room-and-inventory.md). Builds on [shared-designs.md](shared-designs.md) (R6 Publish flow, R7 Design page) and [duels.md](duels.md).
