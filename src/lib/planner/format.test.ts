@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cm, hexColor, isDark, m2, newId } from './format';
+import { cm, hexColor, isDark, newId } from './format';
 
 describe('cm', () => {
 	it('rounds to whole centimetres', () => {
@@ -7,14 +7,6 @@ describe('cm', () => {
 		expect(cm(42.4)).toBe('42');
 		expect(cm(42.5)).toBe('43');
 		expect(cm(-0.4)).toBe('0');
-	});
-});
-
-describe('m2', () => {
-	it('turns cm² into m² with one decimal', () => {
-		expect(m2(10000)).toBe('1.0 m²');
-		expect(m2(158164)).toBe('15.8 m²');
-		expect(m2(0)).toBe('0.0 m²');
 	});
 });
 

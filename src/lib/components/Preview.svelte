@@ -19,7 +19,7 @@
 		/** Explain the walking controls at the top */
 		hint?: boolean;
 	}
-	let { furn, defaultShot = 'door', hint = true }: Props = $props();
+	let { furn, defaultShot = 'above', hint = true }: Props = $props();
 
 	const DEFAULT_TIME = 10;
 

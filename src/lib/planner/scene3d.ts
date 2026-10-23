@@ -4,7 +4,7 @@ import { loadModel } from '../preview/modelLoader';
 import { buildLoggiaSet, buildPiece, MaterialKit } from '../preview/models';
 import { currentScreen, isPhone } from '../preview/quality';
 import { modelInfo } from './catalog';
-import { cm, cssVar } from './format';
+import { cssVar } from './format';
 import { elevation, footprint, type FurnitureCheck } from './furniture';
 import { buildWalls, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
@@ -14,8 +14,6 @@ export interface SceneEvents {
 	onSelect: (id: string | null) => void;
 	/** Piece dragged to a new center; `snap` is false while Alt is held */
 	onDrag: (id: string, cx: number, cy: number, snap: boolean) => void;
-	/** Double-click on a piece */
-	onOpen?: (id: string) => void;
 	/** Screen position (px, relative to the canvas) above the selected piece, every frame it moves */
 	onAnchor?: (p: { x: number; y: number } | null) => void;
 }
@@ -162,13 +160,12 @@ export class RoomScene {
 
 	/* ---------- Room ---------- */
 
-	/** Builds the room; `dims` shows wall lengths and the loggia label. */
-	setRoom(g: Geometry, lowWalls: boolean, dims = true) {
+	/** Builds the room. */
+	setRoom(g: Geometry) {
 		this.invalidate(true);
 		const grp = this.roomGroup;
 		disposeGroup(grp);
 		this.ceilingH = g.H;
-		const wallH = lowWalls ? Math.min(g.H, 110) : g.H;
 		const side = new THREE.MeshStandardMaterial({ color: color('--wall3d'), roughness: 0.92 });
 		const cap = new THREE.MeshStandardMaterial({ color: color('--wall'), roughness: 0.9 });
 		// Dark top face makes wall cuts readable from above
@@ -191,7 +188,7 @@ export class RoomScene {
 		grp.add(floor);
 
 		// Walls
-		const walls = buildWalls(g, wallH);
+		const walls = buildWalls(g, g.H);
 		for (const s of walls.segs) {
 			const { S, d, n, t } = s.e;
 			const um = (s.u0 + s.u1) / 2;
@@ -203,16 +200,6 @@ export class RoomScene {
 				wallMats,
 				{ edges: edgeMat }
 			);
-		}
-		// Wall length labels
-		for (const e of dims ? walls.edges : []) {
-			const sp = labelSprite(cm(e.len), 15, false);
-			sp.position.set(
-				(e.S[0] + e.E[0]) / 2 + e.n[0] * (e.t + 22),
-				wallH + 8,
-				(e.S[1] + e.E[1]) / 2 + e.n[1] * (e.t + 22)
-			);
-			grp.add(sp);
 		}
 
 		// Loggia
@@ -232,17 +219,11 @@ export class RoomScene {
 			});
 			// Fixed table and chairs; part of the Room, so never picked or dragged
 			grp.add(buildLoggiaSet(g.loggiaSet, new MaterialKit()));
-			if (dims) {
-				// Above the table
-				const sp = labelSprite('Loggia', 16, true);
-				sp.position.set(g.W / 2, Math.max(20, ...g.loggiaSet.map((i) => i.h + 16)), ly0 + g.D / 2);
-				grp.add(sp);
-			}
 		}
 
 		// Glass front with frame
 		const fr = g.front;
-		const gH = Math.min(fr.gH, wallH);
+		const gH = Math.min(fr.gH, g.H);
 		const zc = g.L + g.tE / 2;
 		const glass = new THREE.MeshStandardMaterial({
 			color: color('--glass'),
@@ -262,7 +243,7 @@ export class RoomScene {
 		}
 		for (const x of [fr.gx0 + 3.5, fr.bOff, fr.bOff + fr.bW, fr.gx1 - 3.5])
 			addBox(grp, [x, gH / 2, zc], [7, gH, g.tE * 0.5], 0, frame);
-		if (fr.gH <= wallH)
+		if (fr.gH <= g.H)
 			addBox(
 				grp,
 				[(fr.gx0 + fr.gx1) / 2, fr.gH - 3.5, zc],
@@ -325,7 +306,7 @@ export class RoomScene {
 				arc.map((p) => new THREE.Vector3(p[0], 0.9, p[1]))
 			);
 			grp.add(new THREE.Line(lineGeo, arcMat));
-			const h = Math.min(dr.h, wallH);
+			const h = Math.min(dr.h, g.H);
 			addBox(
 				grp,
 				[hx + (op[0] * w) / 2 + c[0] * 2, h / 2, hy + (op[1] * w) / 2 + c[1] * 2],
@@ -725,14 +706,6 @@ export class RoomScene {
 			}
 			down = null;
 		};
-		el.addEventListener('dblclick', (e) => {
-			aim(e as PointerEvent);
-			const hits = ray.intersectObjects(
-				[...this.pieces.values()].map((p) => p.children[0]),
-				true
-			);
-			if (hits.length) this.events.onOpen?.(hits[0].object.userData.fid as string);
-		});
 		el.addEventListener('pointerup', (e) => {
 			if (e.pointerType === 'touch') touchEnd(e, false);
 			else end(e);

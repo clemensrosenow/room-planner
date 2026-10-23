@@ -1,5 +1,4 @@
 export const cm = (v: number) => String(Math.round(v));
-export const m2 = (v: number) => (v / 10000).toFixed(1) + ' m²';
 export const newId = () => 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
 /** sRGB hex number as a CSS color, e.g. 0x1c2741 → '#1c2741'. */

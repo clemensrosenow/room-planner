@@ -6,25 +6,16 @@
 	import { onMount, untrack } from 'svelte';
 
 	interface Props {
-		lowWalls: boolean;
-		/** Wall lengths and labels */
-		showDims?: boolean;
-		/** Double-click on a piece */
-		onopen?: (id: string) => void;
 		/** Screen position above the selected piece (px within this view) */
 		onanchor?: (p: { x: number; y: number } | null) => void;
 	}
-	let { lowWalls, showDims = false, onopen, onanchor }: Props = $props();
+	let { onanchor }: Props = $props();
 
 	let container: HTMLDivElement;
 	let scene = $state<RoomScene | null>(null);
 	let failed = $state(false);
 	/** Bumped when colors or fonts change, so everything gets rebuilt */
 	let styleVersion = $state(0);
-
-	export function resetCamera() {
-		scene?.fitCamera(planner.geo);
-	}
 
 	/** Floor point (plan cm) under a screen point, or null outside the view. */
 	export function planPoint(clientX: number, clientY: number): Point | null {
@@ -36,7 +27,6 @@
 			scene = new RoomScene(container, {
 				onSelect: (id) => selectItem(id),
 				onDrag: (id, cx, cy, snap) => planner.move(id, cx, cy, snap),
-				onOpen: (id) => onopen?.(id),
 				onAnchor: (p) => onanchor?.(p)
 			});
 		} catch {
@@ -57,7 +47,7 @@
 
 	$effect(() => {
 		void styleVersion;
-		scene?.setRoom(planner.geo, lowWalls, showDims);
+		scene?.setRoom(planner.geo);
 		untrack(() => scene?.setBlockedDoors(blockedDoors()));
 	});
 
