@@ -2,7 +2,6 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onboarding } from '#lib/onboarding/state.svelte.ts';
-	import { INVENTORY } from '#lib/planner/room.ts';
 	import Dialog from './ui/Dialog.svelte';
 	import Icon from './ui/Icon.svelte';
 
@@ -22,8 +21,8 @@
 		},
 		{
 			icon: 'send',
-			name: 'Publish & share',
-			text: 'send the link. Friends compare designs in Duels, and the best ones lead the leaderboard.'
+			name: 'Publish',
+			text: 'send it into the Duels and make it to the top of the leaderboard!'
 		}
 	] as const;
 
@@ -40,13 +39,13 @@
 
 <Dialog
 	{open}
-	title="How would you furnish this room?"
+	title="How would you furnish my room?"
 	closable
 	onclose={() => onboarding.closeWelcome()}
 >
 	<p class="text-[14px] text-muted">
-		It's a real room, and everyone gets the same {INVENTORY.length} pieces of real furniture. Arrange
-		them your way, publish your design, and let friends decide where they'd rather live.
+		This is my new room in Munich, with the furniture I brought. Arrange it your way and let friends
+		decide where they'd rather live.
 	</p>
 	<ol class="grid gap-3">
 		{#each steps as step, i (step.name)}
