@@ -1,5 +1,7 @@
 # Spec: Duels replace Likes
 
+> Superseded in part by [ux-polish.md](ux-polish.md): sharing, Publish placement and copy.
+
 Status: Ready to build · Owner: Clemens · Date: 2026-10-17
 
 Vocabulary follows [CONTEXT.md](../../CONTEXT.md). Decision: [ADR 0004](../adr/0004-duels-replace-likes.md). Builds on [shared-designs.md](shared-designs.md), whose Like parts (R3 `likes`, R4 like endpoints, the Like toggle in R7 and R8) this spec replaces.
