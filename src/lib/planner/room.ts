@@ -153,7 +153,7 @@ export const INVENTORY: Piece[] = [
 		WHITE,
 		[
 			{
-				name: 'Trotten desk',
+				name: 'Standing desk',
 				kind: 'standing-desk',
 				size: { w: 160, d: 80, h: DESK_H },
 				at: [0, 0, 0],
@@ -185,7 +185,7 @@ export const INVENTORY: Piece[] = [
 			},
 			// Pushed in until the armrests reach the desk's edge
 			{
-				name: 'Markus chair',
+				name: 'Office chair',
 				kind: 'chair',
 				model: 'ikea-markus-chair',
 				at: [0, 0, 52],
@@ -196,8 +196,8 @@ export const INVENTORY: Piece[] = [
 		DESK_H
 	),
 	packet('piano', 'E-piano', 'piano', BLACK, [
-		{ name: 'Z-stand', kind: 'piano', model: 'keyboard-stand', at: [0, 0, 0], color: BLACK },
-		{ name: 'Yamaha P-45', kind: 'piano', model: 'yamaha-p45', at: [0, STAND_H, 0], color: BLACK },
+		{ name: 'Keyboard stand', kind: 'piano', model: 'keyboard-stand', at: [0, 0, 0], color: BLACK },
+		{ name: 'E-piano', kind: 'piano', model: 'yamaha-p45', at: [0, STAND_H, 0], color: BLACK },
 		{
 			name: 'Piano stool',
 			kind: 'stool',
@@ -207,9 +207,9 @@ export const INVENTORY: Piece[] = [
 		}
 	]),
 	fromModel('monstera', 'Monstera', 'monstera', LEAF),
-	fromModel('kallax', 'Kallax', 'ikea-kallax', WHITE),
+	fromModel('kallax', 'Shelf', 'ikea-kallax', WHITE),
 	{ id: 'nightstand', name: 'Nightstand', kind: 'nightstand', w: 38, d: 43, h: 63, color: WHITE },
-	fromModel('nymo-lamp', 'Nymo lamp', 'ikea-nymo-lamp', BLACK),
+	fromModel('nymo-lamp', 'Table lamp', 'ikea-nymo-lamp', BLACK),
 	fromModel('floor-lamp', 'Floor lamp', 'ikea-skaftet-lamp', BLACK)
 ];
 

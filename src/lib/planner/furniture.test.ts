@@ -167,7 +167,7 @@ describe('checkFurniture: a small Piece standing on another', () => {
 		const all = [stand, lamp];
 		expect(supportOf(lamp, all)).toBeNull();
 		expect(check(lamp, all).overlap).toEqual(['Nightstand']);
-		expect(check(stand, all).overlap).toEqual(['Nymo lamp']);
+		expect(check(stand, all).overlap).toEqual(['Table lamp']);
 	});
 
 	it('does not overlap the radiator, but the Piece under it does', () => {
