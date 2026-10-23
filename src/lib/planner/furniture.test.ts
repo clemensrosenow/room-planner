@@ -313,13 +313,6 @@ describe('checkFurniture: a Piece with a Footprint of several boxes', () => {
 		expect(check(f).doors).toContain(roomDoor.name);
 	});
 
-	it('a Monstera whose leaves reach over the bed is a Conflict', () => {
-		const monstera = INVENTORY.find((p) => p.id === 'monstera')!;
-		const f = piece('monstera', mid.x, mid.y);
-		const bed = piece('bed', mid.x + monstera.w / 2 + 1 + 70, mid.y);
-		expect(check(f, [f, bed]).overlap).toEqual(['Boxspring bed']);
-	});
-
 	it('keepInside pulls a floor lamp in until its head is inside the walls', () => {
 		const f = lamp(ROOM.W - 30, mid.y);
 		expect(keepInside(f, GEO)).toBe(true);

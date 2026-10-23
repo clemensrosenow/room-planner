@@ -17,7 +17,6 @@ const SILVER = 0xc7c9cc;
 const NAVY = 0x1c2741;
 const PALE_OAK = 0xdecfb6;
 const RATTAN = 0x8b5e3c;
-const LEAF = 0x3f6b46;
 
 /** Room inputs in cm. Origin is the top-left inner corner, y grows towards the loggia. */
 export const ROOM: RoomConfig = {
@@ -31,10 +30,10 @@ export const ROOM: RoomConfig = {
 	tE: 30,
 	door: { off: 17, w: 86, h: 201, hinge: 'left', swing: 'in' },
 	front: {
-		// Wall pieces beside the window (bed side 68, desk side 63) reach 26 cm past the glass
+		// Wall pieces beside the window (bed side 68, desk side 63) reach 11 cm past the glass
 		wl: 68,
 		wr: 63,
-		bay: 26,
+		bay: 11,
 		// Opening including its 7 cm frames
 		glassH: 232,
 		// Balcony door 92 wide, ending 67 cm before the right wall piece
@@ -206,7 +205,6 @@ export const INVENTORY: Piece[] = [
 			color: BLACK
 		}
 	]),
-	fromModel('monstera', 'Monstera', 'monstera', LEAF),
 	fromModel('kallax', 'Shelf', 'ikea-kallax', WHITE),
 	{ id: 'nightstand', name: 'Nightstand', kind: 'nightstand', w: 38, d: 43, h: 63, color: WHITE },
 	fromModel('nymo-lamp', 'Table lamp', 'ikea-nymo-lamp', BLACK),
