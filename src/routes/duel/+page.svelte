@@ -148,8 +148,8 @@
 				{#if duel.reason === 'too-few'}
 					<p class="text-[17px] font-bold">Not enough designs yet</p>
 					<p class="text-muted">
-						Duels need at least two designs from other people. Publish yours and share the link with
-						friends.
+						Duels need at least two designs from other people. Publish yours and check back once
+						friends have furnished theirs.
 					</p>
 					<a href="/furnish" class="btn btn-primary">Furnish your design</a>
 				{:else}

@@ -17,13 +17,13 @@
 	import Icon from './ui/Icon.svelte';
 	import Segmented from './ui/Segmented.svelte';
 
-	/** A Published Design, read-only: 3D or plan, its Rank and Duel record, Remix, Share and Delete. */
+	/** A Published Design, read-only: 3D or plan, its Rank and Duel record, Remix and Delete. */
 	let { initial }: { initial: DesignData } = $props();
 
 	// svelte-ignore state_referenced_locally
 	let design = $state(structuredClone(initial));
 	let mounted = $state(false);
-	let shareOpen = $state(false);
+	let publishedOpen = $state(false);
 	let remixOpen = $state(false);
 
 	// svelte-ignore state_referenced_locally
@@ -32,10 +32,10 @@
 	const view = $derived(page.url.searchParams.get('view') === 'plan' ? 'plan' : '3d');
 	const description = $derived(shareDescription(design));
 
-	// Right after publishing, offer to share once
+	// Right after publishing, say where the Design went, once
 	afterNavigate(() => {
 		if (!page.url.searchParams.has('published')) return;
-		shareOpen = true;
+		publishedOpen = true;
 		setParams({ published: null }, { replace: true });
 	});
 
@@ -46,23 +46,6 @@
 			.then((d) => (design.mine = d.mine))
 			.catch(() => {});
 	});
-
-	async function share() {
-		if (navigator.share) {
-			try {
-				await navigator.share({ title: design.title, url });
-				return;
-			} catch (e) {
-				if ((e as Error).name === 'AbortError') return;
-			}
-		}
-		try {
-			await navigator.clipboard.writeText(url);
-			toast.show('Link copied');
-		} catch {
-			toast.show("Couldn't copy the link");
-		}
-	}
 
 	/** Remix replaces the Draft, so warn unless it's still the starting arrangement. */
 	function remix(confirmed = false) {
@@ -173,7 +156,6 @@
 			<button class="btn" onclick={() => remix()} title="Copy into your design and change it">
 				<Icon name="remix" size={15} /> Remix
 			</button>
-			<button class="btn" onclick={share}><Icon name="share" size={15} /> Share</button>
 			{#if design.mine}
 				<ConfirmButton label="Delete" confirmLabel="Delete for good?" onconfirm={remove} />
 			{/if}
@@ -191,41 +173,15 @@
 	</section>
 </div>
 
-<Dialog
-	open={shareOpen}
-	title="Published! Share it with friends"
-	onclose={() => (shareOpen = false)}
->
-	<p class="text-[13px] text-muted">Anyone with the link can see your design in 3D and remix it.</p>
-	<input
-		class="input text-[13px]"
-		readonly
-		value={url}
-		aria-label="Link"
-		onfocus={(e) => e.currentTarget.select()}
-	/>
-	<div class="flex justify-end gap-2">
-		<button class="btn" onclick={() => (shareOpen = false)}>Done</button>
-		<button
-			class="btn btn-primary"
-			onclick={async () => {
-				await share();
-				shareOpen = false;
-			}}
+<Dialog open={publishedOpen} title="Published!" closable onclose={() => (publishedOpen = false)}>
+	<p class="text-[14px] text-muted">
+		Your design is in the Duels now: friends see it next to others and pick where they'd rather
+		live.
+	</p>
+	<div class="flex justify-end">
+		<a href="/duel" class="btn btn-primary" onclick={() => (publishedOpen = false)}
+			>Judge other designs</a
 		>
-			<Icon name="share" size={15} /> Share link
-		</button>
-	</div>
-	<div class="grid justify-items-start gap-2.5 border-t border-line pt-4">
-		<p class="text-[13px] leading-snug">
-			<span class="font-bold">What's next?</span>
-			<span class="text-muted"
-				>See how your design holds up: judge other designs in Duels. Yours will show up for others.</span
-			>
-		</p>
-		<a href="/duel" class="btn" onclick={() => (shareOpen = false)}>
-			<Icon name="scale" size={15} /> Start a Duel
-		</a>
 	</div>
 </Dialog>
 

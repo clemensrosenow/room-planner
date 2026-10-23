@@ -38,17 +38,17 @@
 	const copy = $derived(
 		where === 'design'
 			? {
-					heading: `${designer?.trim() || 'Someone'} furnished this room.`,
-					text: "It's a real room, and everyone gets the same furniture to arrange their own way. Can you do better?"
+					heading: `${designer?.trim() || 'Someone'} furnished my new room.`,
+					text: "It's my room in Munich, with my furniture. Everyone gets the same pieces. Can you do better?"
 				}
 			: where === 'duel'
 				? {
-						heading: 'Designs for one real room.',
-						text: "Everyone furnished the same room with the same furniture. Pick the one you'd rather live in. Your picks rank the leaderboard."
+						heading: 'Help me furnish my new room.',
+						text: "Everyone arranged my furniture in my Munich room. Pick the one you'd rather live in."
 					}
 				: {
-						heading: 'Designs for one real room.',
-						text: 'Everyone arranged the same furniture. Duels decide the ranking.'
+						heading: 'Ideas for my new room.',
+						text: 'Everyone arranged my furniture in my Munich room. Duels decide the ranking.'
 					}
 	);
 

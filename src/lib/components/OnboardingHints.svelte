@@ -72,7 +72,7 @@
 	</Hint>
 {:else if current === 'ready'}
 	<Hint target="publish" prefer="below" title="Every piece has its place." onclose={close('ready')}>
-		Walk through your room in realistic light first, or publish it now and share the link.
+		Walk through your room in realistic light first, or publish it now.
 		{#snippet actions()}
 			<button
 				class="btn"

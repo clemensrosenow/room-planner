@@ -1,13 +1,13 @@
 # Room Planner
 
-Find the best way to furnish one real room. Everyone arranges the same Room with the same real furniture (the Inventory), publishes a Design, shares it by link, judges the others in Duels and remixes them. Duels rank the Designs on the Leaderboard. Vocabulary: [CONTEXT.md](CONTEXT.md), decisions: [docs/adr](docs/adr), specs: [docs/specs/shared-designs.md](docs/specs/shared-designs.md), [docs/specs/duels.md](docs/specs/duels.md).
+Find the best way to furnish one real room. Everyone arranges the same Room with the same real furniture (the Inventory), publishes a Design, judges the others in Duels and remixes them. Duels rank the Designs on the Leaderboard. Vocabulary: [CONTEXT.md](CONTEXT.md), decisions: [docs/adr](docs/adr), specs: [docs/specs/shared-designs.md](docs/specs/shared-designs.md), [docs/specs/duels.md](docs/specs/duels.md).
 
 1. **Furnish** (`/furnish`): arrange the pieces in 3D or on the floor plan. Pieces can only be moved and turned: their sizes and colors are the real ones. The selected piece gets a floating toolbar (rotate, exact position); on the plan it also has a rotation knob. Pieces that stick out of the room, overlap or block a door are Conflicts: they glow red, the blocked door's swing area turns red, and the toolbar says why.
 2. **Experience** (`/experience`): the closed room, realistically lit, for cinematic shots. Preset viewpoints (door, window, corners, above) with smooth camera glides, a looping camera tour (controls fade out). You always stay inside the room: drag to look, ↑↓ to walk, ←→ to turn, scroll or pinch to zoom; only the "above" shot shows the room from outside.
    - Light: sun and sky follow the time-of-day slider in German clock time (glass front faces east, ~51°N, today's date), daylight through the glass, a warm bounce off the sunlit floor, reflections of the real sky, eye-like exposure adaptation at dusk, and a ceiling lamp.
    - Furniture is modelled by its type, or shown as its real 3D model where one exists.
-3. **Publish** (header, on both steps): give the Draft a title (a suggestion is pre-filled, 🎲 for another) and optionally your name. Disabled while there are Conflicts; clicking it then selects the first one. Publishing leads to the Design's page with a share dialog.
-4. **Designs** (`/designs`): the Leaderboard, Top (by Rank from all Duels) or New. A Design page (`/d/<id>-<slug>`) shows it in 3D or as a plan, read-only, with Remix (copies it into your Draft, after a warning if that would replace your own work), Share and, for your own, Delete.
+3. **Publish** (header, on both steps): give the Draft a title (a suggestion is pre-filled, 🎲 for another) and optionally your name. Disabled while there are Conflicts; clicking it then selects the first one. Publishing leads to the Design's page, with a dialog pointing to the Duels.
+4. **Designs** (`/designs`): the Leaderboard, Top (by Rank from all Duels) or New. A Design page (`/d/<id>-<slug>`) shows it in 3D or as a plan, read-only, with Remix (copies it into your Draft, after a warning if that would replace your own work) and, for your own, Delete.
 
 No accounts: a random id in `localStorage` identifies the browser (Device). It publishes, judges Duels (each pair once, never your own Designs) and deletes what it published. Clearing site data makes a new Device.
 

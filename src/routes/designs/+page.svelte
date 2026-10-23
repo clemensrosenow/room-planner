@@ -73,7 +73,7 @@
 				class="grid justify-items-center gap-3 rounded-3xl bg-sheet px-6 py-16 text-center ring-1 ring-line/70"
 			>
 				<p class="text-[17px] font-bold">No designs yet. Be the first</p>
-				<p class="text-muted">Arrange the furniture, then publish it from the top right.</p>
+				<p class="text-muted">Arrange the furniture, then publish it.</p>
 				<a href="/furnish" class="btn btn-primary">Start furnishing</a>
 			</div>
 		{/if}
