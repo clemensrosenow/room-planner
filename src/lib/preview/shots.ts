@@ -12,14 +12,22 @@ export interface Shot {
 
 export const EYE = 160;
 
-/** Viewpoints derived from the room: door, window, every convex corner, from above. */
+/** Viewpoints derived from the room, in this order: from above, door, window, every convex corner. */
 export function makeShots(g: Geometry): Shot[] {
 	const door = g.doors[0];
 	const doorX = (door.x0 + door.x1) / 2;
 	// Center of the main (non-notch) part of the room
 	const cx = g.W / 2;
 	const cy = g.hasNotch ? (g.N + g.L) / 2 : g.L / 2;
+	const size = Math.max(g.W, g.L);
 	const shots: Shot[] = [
+		{
+			id: 'above',
+			label: 'Above',
+			pos: [g.W / 2 - size * 0.25, size * 1.25, g.L / 2 + size * 0.55],
+			target: [g.W / 2, 0, g.L / 2],
+			cutaway: true
+		},
 		{
 			id: 'door',
 			label: 'Door',
@@ -51,15 +59,6 @@ export function makeShots(g: Geometry): Shot[] {
 			pos: [p[0] + ix * 40, EYE, p[1] + iy * 40],
 			target: [cx, 80, cy]
 		});
-	});
-
-	const size = Math.max(g.W, g.L);
-	shots.push({
-		id: 'above',
-		label: 'Above',
-		pos: [g.W / 2 - size * 0.25, size * 1.25, g.L / 2 + size * 0.55],
-		target: [g.W / 2, 0, g.L / 2],
-		cutaway: true
 	});
 	return shots;
 }
