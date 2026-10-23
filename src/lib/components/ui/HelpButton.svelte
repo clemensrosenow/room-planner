@@ -8,16 +8,40 @@
 	interface Props {
 		/** [keys or gesture, what it does] */
 		tips: [string, string][];
-		/** Open upwards (for bars at the bottom of the screen) */
-		up?: boolean;
 	}
-	let { tips, up = false }: Props = $props();
+	let { tips }: Props = $props();
+
+	const WIDTH = 288;
+	const MARGIN = 12;
 
 	let open = $state(false);
 	let root = $state<HTMLElement>();
+	/** Popover offset from the button's left edge and its width, in px */
+	let place = $state({ left: 0, width: WIDTH });
+
+	/**
+	 * Aligns the popover's left edge with the button's if it fits to the right, else their right
+	 * edges; never past the screen's edge.
+	 */
+	function measure() {
+		if (!root) return;
+		const r = root.getBoundingClientRect();
+		const vw = document.documentElement.clientWidth;
+		const width = Math.min(WIDTH, vw - 2 * MARGIN);
+		const left = r.left + width <= vw - MARGIN ? 0 : r.width - width;
+		place = { left: Math.max(left, MARGIN - r.left), width };
+	}
+
+	function toggle() {
+		if (!open) measure();
+		open = !open;
+	}
 </script>
 
 <svelte:window
+	onresize={() => {
+		if (open) measure();
+	}}
 	onpointerdown={(e) => {
 		if (open && !root?.contains(e.target as Node)) open = false;
 	}}
@@ -31,19 +55,13 @@
 />
 
 <span class="relative" bind:this={root}>
-	<IconButton
-		icon="help"
-		label="Tips and shortcuts"
-		pressed={open}
-		onclick={() => (open = !open)}
-	/>
+	<IconButton icon="help" label="Tips and shortcuts" pressed={open} onclick={toggle} />
 	{#if open}
 		<div
-			transition:fly={{ y: up ? 6 : -6, duration: duration(150) }}
-			class={[
-				'absolute left-0 z-30 w-72 rounded-2xl bg-sheet p-4 shadow-float ring-1 ring-line/70',
-				up ? 'bottom-full mb-3' : 'top-full mt-3'
-			]}
+			transition:fly={{ y: -6, duration: duration(150) }}
+			class="absolute top-full z-30 mt-3 rounded-2xl bg-sheet p-4 shadow-float ring-1 ring-line/70"
+			style:left="{place.left}px"
+			style:width="{place.width}px"
 			role="dialog"
 			aria-label="Tips and shortcuts"
 		>

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import Inspector from '#lib/components/Inspector.svelte';
 	import OnboardingHints from '#lib/components/OnboardingHints.svelte';
 	import WelcomeCard from '#lib/components/WelcomeCard.svelte';
 	import InventoryDock from '#lib/components/InventoryDock.svelte';
@@ -21,10 +20,9 @@
 	import { ui } from '#lib/ui.svelte.ts';
 	import { selectItem, setParams } from '#lib/url.ts';
 	import { duration } from '#lib/motion.ts';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { fly, scale } from 'svelte/transition';
 
-	let lowWalls = $state(false);
-	let showDims = $state(false);
 	let listOpen = $state(false);
 	/** A Piece is on its way from the dock into the room */
 	let dockDragging = $state(false);
@@ -34,8 +32,6 @@
 	/** `?view=plan` shows the floor plan, anything else the 3D view */
 	const view = $derived(page.url.searchParams.get('view') === 'plan' ? 'plan' : '3d');
 	const itemId = $derived(page.url.searchParams.get('item'));
-	/** `?details=1` opens the panel with exact sizes for the selected piece */
-	const details = $derived(page.url.searchParams.has('details'));
 
 	// The selection lives in the URL; mirror it into the planner for the views
 	$effect.pre(() => {
@@ -69,11 +65,24 @@
 		})
 	);
 
-	async function openDetails(id?: string) {
-		if (id && id !== itemId) await selectItem(id);
-		setParams({ details: 1 }, { replace: true });
-	}
-	const closeDetails = () => setParams({ details: null }, { replace: true });
+	const touch = new MediaQuery('pointer: coarse');
+	/** Tips in the "?" popover: shortcuts for mouse and keyboard, gestures on touch screens */
+	const tips = $derived<[string, string][]>(
+		touch.current
+			? [
+					['Drag', 'Move a piece; it snaps to walls and furniture'],
+					['Tap in the dock', 'Drop a piece in the middle'],
+					['Pinch, two fingers', 'Zoom and pan']
+				]
+			: [
+					['Drag', 'Move a piece; it snaps to walls and furniture (Alt: free)'],
+					['Arrow keys', 'Nudge 1 cm, with Shift 10 cm'],
+					['R', 'Rotate 90°'],
+					['Delete', 'Remove from the room'],
+					['Esc', 'Deselect'],
+					['Ctrl Z', 'Undo (Ctrl Shift Z redo)']
+				]
+	);
 
 	function setView(v: '3d' | 'plan') {
 		anchor = null;
@@ -86,7 +95,7 @@
 
 	/**
 	 * Arrow keys move the selected piece (1 cm, Shift 10 cm), R rotates, Delete puts it back into
-	 * the dock, Esc steps back.
+	 * the dock, Esc deselects.
 	 */
 	function onkeydown(e: KeyboardEvent) {
 		const t = e.target as HTMLElement;
@@ -103,10 +112,8 @@
 		else if (e.key === 'ArrowDown') f.cy += step;
 		else if (e.key === 'r' || e.key === 'R') planner.rotate(f, e.shiftKey ? -90 : 90);
 		else if (e.key === 'Delete' || e.key === 'Backspace') planner.unplace(f.id);
-		else if (e.key === 'Escape') {
-			if (details) closeDetails();
-			else selectItem(null);
-		} else return;
+		else if (e.key === 'Escape') selectItem(null);
+		else return;
 		e.preventDefault();
 	}
 </script>
@@ -123,24 +130,12 @@
 	onpointercancel={drag.up}
 />
 
-{#snippet inspector()}
-	{#if planner.selected}<Inspector f={planner.selected} />{/if}
-{/snippet}
-
-<Workspace
-	title="Position"
-	sub={planner.selected?.name ?? ''}
-	panel={details && planner.selected ? inspector : undefined}
-	onclose={closeDetails}
->
+<Workspace>
 	<div class="absolute inset-0" bind:clientWidth={canvasW} bind:clientHeight={canvasH}>
 		<!-- The 3D scene stays mounted so the camera keeps its position -->
 		<div class="absolute inset-0" hidden={view !== '3d'}>
 			<Scene3D
 				bind:this={scene3d}
-				{lowWalls}
-				{showDims}
-				onopen={openDetails}
 				onanchor={(p) => {
 					if (view === '3d') anchor = p;
 				}}
@@ -150,8 +145,6 @@
 			<div class="absolute inset-0">
 				<PlanView
 					bind:this={planView}
-					{showDims}
-					onopen={openDetails}
 					onanchor={(p) => {
 						if (view === 'plan') anchor = p;
 					}}
@@ -176,7 +169,7 @@
 				style:left="{Math.min(Math.max(anchor.x, 170), canvasW - 170)}px"
 				style:top="{Math.min(Math.max(anchor.y - 14, 150), canvasH - 110)}px"
 			>
-				<SelectionToolbar f={planner.selected} ondetails={() => openDetails()} />
+				<SelectionToolbar f={planner.selected} />
 			</div>
 		{/if}
 	</div>
@@ -186,7 +179,6 @@
 			<Segmented
 				label="View"
 				value={view}
-				iconsOnPhones
 				options={[
 					{ value: '3d', label: '3D', icon: 'cube' },
 					{ value: 'plan', label: 'Plan', icon: 'plan' }
@@ -194,38 +186,13 @@
 				onchange={setView}
 			/>
 			<span class="mx-1 h-5 w-px bg-line"></span>
-			{#if view === '3d'}
-				<IconButton
-					icon="low-walls"
-					label="Low walls"
-					pressed={lowWalls}
-					onclick={() => (lowWalls = !lowWalls)}
-				/>
-				<IconButton icon="recenter" label="Reset view" onclick={() => scene3d?.resetCamera()} />
-			{/if}
-			<IconButton
-				icon="ruler"
-				label="Room dimensions"
-				pressed={showDims}
-				onclick={() => (showDims = !showDims)}
-			/>
 			<IconButton
 				icon="list"
 				label="Everything in the room ({planner.furn.length})"
 				pressed={listOpen}
 				onclick={() => (listOpen = !listOpen)}
 			/>
-			<HelpButton
-				tips={[
-					['Drag', 'Move a piece; it snaps to walls and furniture (Alt: free)'],
-					['Arrow keys', 'Nudge 1 cm, with Shift 10 cm'],
-					['R', 'Rotate 90°'],
-					['Delete', 'Put the piece back below'],
-					['Double-click', 'Exact position'],
-					['Esc', 'Close details, then deselect'],
-					['Ctrl Z', 'Undo (Ctrl Shift Z redo)']
-				]}
-			/>
+			<HelpButton {tips} />
 		</FloatingBar>
 		{#if listOpen}
 			<div transition:fly={{ y: -8, duration: duration(160) }}>
@@ -235,14 +202,11 @@
 	</div>
 
 	<!--
-		On phones the details sheet takes the space of the dock, and so do the selected Piece's
-		actions; undo and redo sit above them, as the header has no room for them there
+		On phones the selected Piece's actions take the space of the dock; undo and redo sit above
+		them, as the header has no room for them there
 	-->
 	<div
-		class={[
-			'pointer-events-none absolute inset-x-0 bottom-4 z-10 flex flex-col items-center gap-2 px-4',
-			details && 'max-md:hidden'
-		]}
+		class="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex flex-col items-center gap-2 px-4"
 	>
 		<div class="self-end sm:hidden">
 			<FloatingBar label="History">
@@ -262,7 +226,7 @@
 		</div>
 		{#if planner.selected && !dockDragging}
 			<div class="md:hidden" data-hint="toolbar" transition:fly={{ y: 8, duration: duration(140) }}>
-				<SelectionToolbar f={planner.selected} ondetails={() => openDetails()} docked />
+				<SelectionToolbar f={planner.selected} docked />
 			</div>
 		{/if}
 		<div

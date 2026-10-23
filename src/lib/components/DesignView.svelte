@@ -111,7 +111,7 @@
 		{/await}
 	{:else if view === 'plan'}
 		<div class="absolute inset-0 pt-16 max-md:pt-64">
-			<PlanView {furn} showDims={false} />
+			<PlanView {furn} />
 		</div>
 	{/if}
 

@@ -9,11 +9,10 @@
 	/** Quick actions floating above the selected Piece, or docked at the bottom on phones. */
 	interface Props {
 		f: Furniture;
-		ondetails: () => void;
 		/** At the bottom of the screen: the problems show above the actions */
 		docked?: boolean;
 	}
-	let { f, ondetails, docked = false }: Props = $props();
+	let { f, docked = false }: Props = $props();
 
 	const problems = $derived(describeCheck(planner.checks[f.id]));
 </script>
@@ -26,8 +25,7 @@
 		<span class="mx-0.5 h-5 w-px bg-line"></span>
 		<IconButton icon="rotate-ccw" label="Rotate left" onclick={() => planner.rotate(f, -90)} />
 		<IconButton icon="rotate-cw" label="Rotate right (R)" onclick={() => planner.rotate(f, 90)} />
-		<IconButton icon="sliders" label="Exact position" onclick={ondetails} />
-		<IconButton icon="close" label="Put back (Delete)" onclick={() => planner.unplace(f.id)} />
+		<IconButton icon="trash" label="Remove (Delete)" onclick={() => planner.unplace(f.id)} />
 	</FloatingBar>
 	{#if problems.length}
 		<p

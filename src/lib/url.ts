@@ -1,7 +1,10 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 
-/** The app's steps for working on the Draft, in order. */
+/**
+ * The app's pages for working on the Draft, in order. The header shows them as steps 1 and 2;
+ * step 3 is the Publish button, which works from every page.
+ */
 export const STEPS = [
 	{ path: '/furnish', label: 'Furnish' },
 	{ path: '/experience', label: 'Experience' }
@@ -35,6 +38,5 @@ export function selectItem(id: string | null) {
 		return;
 	}
 	if (current === null) return setParams({ item: id }, { state: { selectionPushed: true } });
-	// Deselecting also closes the details panel
-	return setParams({ item: id, ...(id === null && { details: null }) }, { replace: true });
+	return setParams({ item: id }, { replace: true });
 }
