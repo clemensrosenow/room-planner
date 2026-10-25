@@ -16,6 +16,8 @@ export interface SceneEvents {
 	onDrag: (id: string, cx: number, cy: number, snap: boolean) => void;
 	/** Screen position (px, relative to the canvas) above the selected piece, every frame it moves */
 	onAnchor?: (p: { x: number; y: number } | null) => void;
+	/** Furniture rebuilt and every real model shown (or failed to load) */
+	onSettled?: () => void;
 }
 
 const color = (v: string) => new THREE.Color(cssVar(v));
@@ -438,9 +440,12 @@ export class RoomScene {
 		this.setPositions(furn);
 
 		// loadModel never rejects; a model that failed stays a stand-in and brings no rebuild
-		if (missing.size)
+		if (!missing.size) this.events.onSettled?.();
+		else
 			Promise.all([...missing].map(loadModel)).then((ok) => {
-				if (ok.some(Boolean) && this.builds === build) this.setFurniture(furn);
+				if (this.builds !== build) return;
+				if (ok.some(Boolean)) this.setFurniture(furn);
+				else this.events.onSettled?.();
 			});
 	}
 

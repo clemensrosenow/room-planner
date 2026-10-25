@@ -4,6 +4,7 @@
 	import type { DesignData } from '#lib/social/types.ts';
 	import { fade } from 'svelte/transition';
 	import Icon from './ui/Icon.svelte';
+	import Loader from './ui/Loader.svelte';
 
 	/**
 	 * One Design of a Duel in 3D, full screen and read-only. A single Preview shows either side,
@@ -34,7 +35,9 @@
 	{onclose}
 >
 	<!-- Loaded on demand: the Duel page itself only shows plans and doesn't need three.js -->
-	{#await import('./Preview.svelte') then { default: Preview }}
+	{#await import('./Preview.svelte')}
+		<Loader />
+	{:then { default: Preview }}
 		<Preview {furn} defaultShot="above" hint={false} />
 	{/await}
 
