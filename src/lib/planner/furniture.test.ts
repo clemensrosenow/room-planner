@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
 	bbox,
 	checkFurniture,
+	corners,
 	describeCheck,
 	elevation,
 	footprint,
 	insideRoom,
 	keepInside,
+	solids,
 	supportOf
 } from './furniture';
-import { computeGeometry, floorRects } from './geometry';
+import { partSize } from './catalog';
+import { computeGeometry, floorRects, type Door } from './geometry';
 import { conflictIds, designFurniture, GEO, INVENTORY, ROOM } from './room';
 import type { Furniture } from './types';
 
@@ -79,17 +82,86 @@ describe('checkFurniture: overlapping another Piece is a Conflict', () => {
 		expect(check(stand, all).overlap).toEqual([]);
 		expect(check(beside, all).overlap).toEqual([]);
 	});
+});
 
-	it('also for a Packet, by the box around its parts', () => {
-		const workstation = INVENTORY.find((p) => p.id === 'workstation')!;
+describe('checkFurniture: a Packet is in Conflict only through its parts', () => {
+	const workstation = INVENTORY.find((p) => p.id === 'workstation')!;
+	const epiano = INVENTORY.find((p) => p.id === 'piano')!;
+	/** Where a part of a Packet standing at `mid`, unturned, is centered in plan */
+	const at = (packet: typeof workstation, name: string) => {
+		const part = packet.parts!.find((p) => p.name === name)!;
+		return { x: mid.x + part.at[0], y: mid.y + part.at[2], part };
+	};
+
+	it('a Nightstand in the empty corner of the Workstation box beside its chair has no Conflict', () => {
 		const packet = piece('workstation', mid.x, mid.y);
-		// Just inside the corner of the Packet's box, where the box is but maybe no part is
+		// Just inside the corner of the Packet's box, beside the chair and in front of the desk
 		const stand = piece(
 			'nightstand',
 			mid.x + workstation.w / 2 + nightstand.w / 2 - 2,
 			mid.y + workstation.d / 2 + nightstand.d / 2 - 2
 		);
+		expect(check(stand, [packet, stand]).overlap).toEqual([]);
+		expect(check(packet, [packet, stand]).overlap).toEqual([]);
+	});
+
+	it('a Nightstand pushed into the Workstation chair is a Conflict for both', () => {
+		const packet = piece('workstation', mid.x, mid.y);
+		const chair = at(workstation, 'Office chair');
+		const stand = piece('nightstand', chair.x + 40, chair.y);
 		expect(check(stand, [packet, stand]).overlap).toEqual(['Workstation']);
+		expect(check(packet, [packet, stand]).overlap).toEqual(['Nightstand']);
+	});
+
+	it('a Nightstand under the E-piano keys beside the stand has no Conflict, a taller Piece does', () => {
+		const packet = piece('piano', mid.x, mid.y);
+		const keys = at(epiano, 'E-piano');
+		const stand = at(epiano, 'Keyboard stand');
+		// Right of the stand, under the end of the keys, which start higher than a nightstand
+		const x = stand.x + partSize(stand.part).w / 2 + nightstand.w / 2 + 1;
+		const low = piece('nightstand', x, keys.y);
+		expect(keys.part.at[1]).toBeGreaterThan(nightstand.h);
+		expect(check(low, [packet, low]).overlap).toEqual([]);
+		const lamp = piece('floor-lamp', x, keys.y);
+		expect(check(lamp, [packet, lamp]).overlap).toEqual(['E-piano']);
+	});
+
+	it('the turned 24" monitor counts where it stands, not as an unturned box', () => {
+		const packet = piece('workstation', mid.x, mid.y);
+		const solid = solids(packet).find((b) => b.rot)!;
+		expect(solid.rot).toBe(20);
+		const xs = corners(packet, solid).map((p) => p[0]);
+		// Turned, the 33 cm wide monitor reaches wider than 33 cm in plan
+		expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(33);
+	});
+});
+
+describe('checkFurniture: a Table lamp on a Packet', () => {
+	const workstation = INVENTORY.find((p) => p.id === 'workstation')!;
+	const desk = workstation.parts!.find((p) => p.name === 'Standing desk')!;
+	const chair = workstation.parts!.find((p) => p.name === 'Office chair')!;
+	const packet = piece('workstation', mid.x, mid.y);
+
+	it('stands on the Workstation desk at desk height', () => {
+		const lamp = piece('nymo-lamp', mid.x + desk.at[0] + 50, mid.y + desk.at[2] + 20);
+		const all = [packet, lamp];
+		expect(supportOf(lamp, all)).toBe(packet);
+		expect(elevation(lamp, all)).toBe(workstation.top);
+		expect(check(lamp, all)).toMatchObject({ overlap: [], bad: false });
+	});
+
+	it('over the Workstation chair stands on the floor and overlaps it', () => {
+		const lamp = piece('nymo-lamp', mid.x + chair.at[0], mid.y + chair.at[2]);
+		const all = [packet, lamp];
+		expect(supportOf(lamp, all)).toBeNull();
+		expect(check(lamp, all).overlap).toEqual(['Workstation']);
+	});
+
+	it('over the E-piano stands on the floor, the E-piano has no surface', () => {
+		const piano = piece('piano', mid.x, mid.y);
+		const lamp = piece('nymo-lamp', mid.x, mid.y);
+		expect(supportOf(lamp, [piano, lamp])).toBeNull();
+		expect(check(lamp, [piano, lamp]).overlap).toEqual(['E-piano']);
 	});
 });
 
@@ -106,21 +178,37 @@ describe('checkFurniture: overlapping the radiator is a Conflict', () => {
 });
 
 describe('checkFurniture: blocking a door is a Conflict', () => {
-	it('inside the swing of the room door', () => {
-		// Diagonally off the hinge, inside the quarter circle the leaf sweeps
-		const reach = roomDoor.w / 2;
-		const f = piece('nightstand', roomDoor.hinge[0] + reach * 0.7, roomDoor.hinge[1] + reach * 0.7);
+	/** Plan point `r` cm from the door's hinge, `deg` degrees open from its closed leaf */
+	const inSwing = (dr: Door, deg: number, r: number): [number, number] => {
+		const a = (deg * Math.PI) / 180;
+		return [
+			dr.hinge[0] + (dr.closed[0] * Math.cos(a) + dr.open[0] * Math.sin(a)) * r,
+			dr.hinge[1] + (dr.closed[1] * Math.cos(a) + dr.open[1] * Math.sin(a)) * r
+		];
+	};
+	// The 25 cm Table lamp fits well inside either half of a door's swing
+	const lamp = (at: [number, number]) => piece('nymo-lamp', ...at);
+
+	it('a Piece in the first 45° of the room door swing blocks it', () => {
+		const f = lamp(inSwing(roomDoor, 22.5, roomDoor.w * 0.6));
 		expect(check(f)).toMatchObject({ doors: ['room door'], outside: false, bad: true });
 	});
 
-	it('inside the swing of the balcony door', () => {
-		const reach = balconyDoor.w / 2;
-		const f = piece(
-			'nightstand',
-			balconyDoor.hinge[0] - reach * 0.7,
-			balconyDoor.hinge[1] - reach * 0.7
-		);
+	it('a Piece in the first 45° of the balcony door swing blocks it', () => {
+		const f = lamp(inSwing(balconyDoor, 22.5, balconyDoor.w * 0.6));
 		expect(check(f)).toMatchObject({ doors: ['balcony door'], outside: false, bad: true });
+	});
+
+	it('a Piece in the 45°–90° part of the swing is not a Conflict', () => {
+		for (const dr of [roomDoor, balconyDoor]) {
+			const f = lamp(inSwing(dr, 67.5, dr.w * 0.6));
+			expect(check(f)).toEqual({ doors: [], overlap: [], outside: false, bad: false });
+		}
+	});
+
+	it('a Piece reaching across the 45° line blocks the door', () => {
+		const f = piece('nightstand', ...inSwing(roomDoor, 45, roomDoor.w * 0.6));
+		expect(check(f).doors).toEqual(['room door']);
 	});
 
 	it('not beyond the reach of the leaf', () => {
