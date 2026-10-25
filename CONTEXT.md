@@ -17,7 +17,7 @@ One item of the **Inventory**. Its size and color are fixed; a **Design** only d
 _Avoid_: item, object, furniture (as a count noun)
 
 **Packet**:
-A **Piece** made of several things that always stand together, e.g. a desk with its chair and monitor, or an e-piano on its stand with a stool. It moves and turns as one, and its **Footprint** is one box around all its parts.
+A **Piece** made of several things that always stand together, e.g. a desk with its chair and monitor, or an e-piano on its stand with a stool. It moves and turns as one, and its **Footprint** is one box around all its parts. Only the parts themselves can cause a **Conflict**, each at its own height: another **Piece** may stand in a gap between them or under the keys of the e-piano. Small things stand only on its desk top.
 _Avoid_: group, set, bundle
 
 **Footprint**:

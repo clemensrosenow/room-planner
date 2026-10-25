@@ -1,4 +1,4 @@
-import { modelInfo } from './catalog';
+import { modelInfo, partSize } from './catalog';
 import { floorRects, MIN_OPEN, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
@@ -23,7 +23,7 @@ function toPlan(f: Furniture, px: number, py: number): Point {
 /**
  * One box of a piece's Footprint: center x / y relative to the piece's center (cm, unrotated,
  * x along its width, y along its depth), its width and depth, and the heights it spans above
- * where the piece stands.
+ * where the piece stands. A Packet's part may be turned on the piece by `rot` degrees.
  */
 export interface Box {
 	x: number;
@@ -32,6 +32,15 @@ export interface Box {
 	d: number;
 	y0: number;
 	y1: number;
+	rot?: number;
+}
+
+/** Maps a point of a box (relative to the box's center, unrotated) to piece coordinates. */
+function toPiece(b: Box, px: number, py: number): Point {
+	const a = ((b.rot ?? 0) * Math.PI) / 180;
+	const c = Math.cos(a);
+	const s = Math.sin(a);
+	return [b.x + px * c - py * s, b.y + px * s + py * c];
 }
 
 /**
@@ -52,6 +61,18 @@ export function footprint(f: Furniture): Box[] {
 	}));
 }
 
+/**
+ * The boxes a piece can be in Conflict with: a Packet's parts one by one, each at its own
+ * heights, so another Piece may stand in a gap between them; else its Footprint.
+ */
+export function solids(f: Furniture): Box[] {
+	if (!f.parts) return footprint(f);
+	return f.parts.map((p) => {
+		const s = partSize(p);
+		return { x: p.at[0], y: p.at[2], w: s.w, d: s.d, y0: p.at[1], y1: p.at[1] + s.h, rot: p.rot };
+	});
+}
+
 /** Plan corners of one box of the piece, the foot by default. */
 export function corners(f: Furniture, b: Box = footprint(f)[0]): Point[] {
 	return [
@@ -59,7 +80,7 @@ export function corners(f: Furniture, b: Box = footprint(f)[0]): Point[] {
 		[1, -1],
 		[1, 1],
 		[-1, 1]
-	].map(([sx, sy]) => toPlan(f, b.x + (sx * b.w) / 2, b.y + (sy * b.d) / 2));
+	].map(([sx, sy]) => toPlan(f, ...toPiece(b, (sx * b.w) / 2, (sy * b.d) / 2)));
 }
 
 /** Plan bounding box around all boxes of the piece. */
@@ -82,18 +103,31 @@ function samplePoints(f: Furniture, b: Box, step: number): Point[] {
 	const pts: Point[] = [];
 	for (let i = 0; i <= nx; i++)
 		for (let j = 0; j <= ny; j++)
-			pts.push(toPlan(f, b.x - b.w / 2 + (b.w * i) / nx, b.y - b.d / 2 + (b.d * j) / ny));
+			pts.push(toPlan(f, ...toPiece(b, -b.w / 2 + (b.w * i) / nx, -b.d / 2 + (b.d * j) / ny)));
 	return pts;
 }
 
-/** Whether a plan point lies on the piece's foot. */
+/**
+ * The boxes small items can stand on: the foot, or a Packet's parts whose top is the Packet's
+ * `top` (the Workstation's desk, not its chair). A Packet without `top` carries nothing.
+ */
+function surfaces(f: Furniture): Box[] {
+	if (!f.parts) return footprint(f).slice(0, 1);
+	return solids(f).filter((b) => f.top !== undefined && Math.abs(b.y1 - f.top) < 0.5);
+}
+
+/** Whether a plan point lies on one of the piece's surfaces. */
 function covers(f: Furniture, x: number, y: number) {
-	const a = (f.rot * Math.PI) / 180;
-	const dx = x - f.cx;
-	const dy = y - f.cy;
-	const lx = dx * Math.cos(a) + dy * Math.sin(a);
-	const ly = -dx * Math.sin(a) + dy * Math.cos(a);
-	return Math.abs(lx) <= f.w / 2 && Math.abs(ly) <= f.d / 2;
+	/** Rotates (dx, dy) back by `deg` degrees */
+	const unturn = (dx: number, dy: number, deg: number): Point => {
+		const a = (deg * Math.PI) / 180;
+		return [dx * Math.cos(a) + dy * Math.sin(a), -dx * Math.sin(a) + dy * Math.cos(a)];
+	};
+	const [px, py] = unturn(x - f.cx, y - f.cy, f.rot);
+	return surfaces(f).some((b) => {
+		const [lx, ly] = unturn(px - b.x, py - b.y, b.rot ?? 0);
+		return Math.abs(lx) <= b.w / 2 && Math.abs(ly) <= b.d / 2;
+	});
 }
 
 /**
@@ -138,12 +172,12 @@ function boxesOverlap(A: Point[], B: Point[]) {
 }
 
 /**
- * Whether two pieces take up the same space: a box of one overlaps a box of the other in plan
- * and in height. `za` / `zb` are the heights the pieces stand at.
+ * Whether two pieces take up the same space: a solid box of one overlaps one of the other in
+ * plan and in height. `za` / `zb` are the heights the pieces stand at.
  */
 function overlaps(a: Furniture, b: Furniture, za = 0, zb = 0) {
-	const bs = footprint(b).map((box) => ({ box, cs: corners(b, box) }));
-	return footprint(a).some((ba) => {
+	const bs = solids(b).map((box) => ({ box, cs: corners(b, box) }));
+	return solids(a).some((ba) => {
 		const ca = corners(a, ba);
 		return bs.some(
 			({ box: bb, cs }) =>
@@ -189,7 +223,7 @@ export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): Fur
 				dr.closed[0] * Math.sin(a) - dr.open[0] * Math.cos(a),
 				dr.closed[1] * Math.sin(a) - dr.open[1] * Math.cos(a)
 			];
-			return footprint(f)
+			return solids(f)
 				.filter((b) => z + b.y0 < dr.h)
 				.flatMap((b) => samplePoints(f, b, 5))
 				.some((p) => {
