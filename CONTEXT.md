@@ -37,7 +37,7 @@ A frozen snapshot of a **Draft**, readable by anyone with its link. It never cha
 _Avoid_: post, submission, entry
 
 **Conflict**:
-A piece of furniture that sticks out of the **Room**, overlaps another piece at the same height or blocks a door. Every box of its **Footprint** counts: a floor lamp's head may reach over the bed, but not through a wall or into the wardrobe. A **Draft** with any **Conflict** cannot be published.
+A piece of furniture that sticks out of the **Room**, overlaps another piece at the same height or blocks a door. A door is blocked when something stands in the first 45° of its swing; the rest of the swing may be furnished. Every box of its **Footprint** counts: a floor lamp's head may reach over the bed, but not through a wall or into the wardrobe. A **Draft** with any **Conflict** cannot be published.
 _Avoid_: error, issue, collision
 
 **Remix**:

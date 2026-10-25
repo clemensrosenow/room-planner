@@ -9,7 +9,7 @@ import {
 	keepInside,
 	supportOf
 } from './furniture';
-import { computeGeometry, floorRects } from './geometry';
+import { computeGeometry, floorRects, type Door } from './geometry';
 import { conflictIds, designFurniture, GEO, INVENTORY, ROOM } from './room';
 import type { Furniture } from './types';
 
@@ -106,21 +106,37 @@ describe('checkFurniture: overlapping the radiator is a Conflict', () => {
 });
 
 describe('checkFurniture: blocking a door is a Conflict', () => {
-	it('inside the swing of the room door', () => {
-		// Diagonally off the hinge, inside the quarter circle the leaf sweeps
-		const reach = roomDoor.w / 2;
-		const f = piece('nightstand', roomDoor.hinge[0] + reach * 0.7, roomDoor.hinge[1] + reach * 0.7);
+	/** Plan point `r` cm from the door's hinge, `deg` degrees open from its closed leaf */
+	const inSwing = (dr: Door, deg: number, r: number): [number, number] => {
+		const a = (deg * Math.PI) / 180;
+		return [
+			dr.hinge[0] + (dr.closed[0] * Math.cos(a) + dr.open[0] * Math.sin(a)) * r,
+			dr.hinge[1] + (dr.closed[1] * Math.cos(a) + dr.open[1] * Math.sin(a)) * r
+		];
+	};
+	// The 25 cm Table lamp fits well inside either half of a door's swing
+	const lamp = (at: [number, number]) => piece('nymo-lamp', ...at);
+
+	it('a Piece in the first 45° of the room door swing blocks it', () => {
+		const f = lamp(inSwing(roomDoor, 22.5, roomDoor.w * 0.6));
 		expect(check(f)).toMatchObject({ doors: ['room door'], outside: false, bad: true });
 	});
 
-	it('inside the swing of the balcony door', () => {
-		const reach = balconyDoor.w / 2;
-		const f = piece(
-			'nightstand',
-			balconyDoor.hinge[0] - reach * 0.7,
-			balconyDoor.hinge[1] - reach * 0.7
-		);
+	it('a Piece in the first 45° of the balcony door swing blocks it', () => {
+		const f = lamp(inSwing(balconyDoor, 22.5, balconyDoor.w * 0.6));
 		expect(check(f)).toMatchObject({ doors: ['balcony door'], outside: false, bad: true });
+	});
+
+	it('a Piece in the 45°–90° part of the swing is not a Conflict', () => {
+		for (const dr of [roomDoor, balconyDoor]) {
+			const f = lamp(inSwing(dr, 67.5, dr.w * 0.6));
+			expect(check(f)).toEqual({ doors: [], overlap: [], outside: false, bad: false });
+		}
+	});
+
+	it('a Piece reaching across the 45° line blocks the door', () => {
+		const f = piece('nightstand', ...inSwing(roomDoor, 45, roomDoor.w * 0.6));
+		expect(check(f).doors).toEqual(['room door']);
 	});
 
 	it('not beyond the reach of the leaf', () => {

@@ -1,9 +1,9 @@
 import { modelInfo } from './catalog';
-import { floorRects, type Geometry } from './geometry';
+import { floorRects, MIN_OPEN, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
 export interface FurnitureCheck {
-	/** Names of doors whose swing area the piece blocks */
+	/** Names of doors the piece keeps from opening MIN_OPEN degrees */
 	doors: string[];
 	/** Names of overlapping pieces */
 	overlap: string[];
@@ -179,22 +179,28 @@ export function checkFurniture(f: Furniture, all: Furniture[], g: Geometry): Fur
 	if (modelInfo(f)?.mount === 'ceiling') return { doors: [], overlap: [], outside, bad: outside };
 	const support = supportOf(f, all);
 	const z = elevation(f, all);
+	// A door only needs to open MIN_OPEN degrees: what stands further along its swing is fine
+	const a = (MIN_OPEN * Math.PI) / 180;
 	const doors = g.doors
-		.filter(
-			(dr) =>
-				dr.inward &&
-				footprint(f)
-					.filter((b) => z + b.y0 < dr.h)
-					.flatMap((b) => samplePoints(f, b, 5))
-					.some((p) => {
-						const v = [p[0] - dr.hinge[0], p[1] - dr.hinge[1]];
-						return (
-							Math.hypot(v[0], v[1]) < dr.w - 0.5 &&
-							v[0] * dr.closed[0] + v[1] * dr.closed[1] > 0.5 &&
-							v[0] * dr.open[0] + v[1] * dr.open[1] > 0.5
-						);
-					})
-		)
+		.filter((dr) => {
+			if (!dr.inward) return false;
+			// Points into the swing from its MIN_OPEN edge, towards the closed leaf
+			const n = [
+				dr.closed[0] * Math.sin(a) - dr.open[0] * Math.cos(a),
+				dr.closed[1] * Math.sin(a) - dr.open[1] * Math.cos(a)
+			];
+			return footprint(f)
+				.filter((b) => z + b.y0 < dr.h)
+				.flatMap((b) => samplePoints(f, b, 5))
+				.some((p) => {
+					const v = [p[0] - dr.hinge[0], p[1] - dr.hinge[1]];
+					return (
+						Math.hypot(v[0], v[1]) < dr.w - 0.5 &&
+						v[0] * dr.open[0] + v[1] * dr.open[1] > 0.5 &&
+						v[0] * n[0] + v[1] * n[1] > 0.5
+					);
+				});
+		})
 		.map((dr) => dr.name);
 	const overlap = all
 		.filter(
