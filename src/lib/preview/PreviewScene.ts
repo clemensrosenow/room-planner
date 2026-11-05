@@ -92,6 +92,8 @@ export class PreviewScene {
 	onModeChange: (mode: CameraMode) => void = () => {};
 	/** Called when the user moves or turns by hand, leaving the chosen viewpoint */
 	onManual: () => void = () => {};
+	/** Called after a build once every real model is shown (or has failed to load) */
+	onSettled: () => void = () => {};
 
 	private renderer: THREE.WebGLRenderer;
 	private composer: EffectComposer;
@@ -615,9 +617,12 @@ export class PreviewScene {
 		this.invalidate(true);
 
 		// loadModel never rejects; a model that failed stays a stand-in and brings no rebuild
-		if (missing.size)
+		if (!missing.size) this.onSettled();
+		else
 			Promise.all([...missing].map(loadModel)).then((ok) => {
-				if (ok.some(Boolean) && this.last?.furn === furn) this.build(this.last.g, furn);
+				if (this.last?.furn !== furn) return;
+				if (ok.some(Boolean)) this.build(this.last.g, furn);
+				else this.onSettled();
 			});
 	}
 

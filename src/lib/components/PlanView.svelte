@@ -365,13 +365,14 @@
 			{/each}
 		{/each}
 
-		<!-- Doors: swing area, arc and leaf -->
+		<!-- Doors: the part of the swing that must stay free, the full arc and the leaf -->
 		{#each g.doors as dr (dr.key)}
 			{@const [hx, hy] = dr.hinge}
 			{@const c = dr.closed}
 			{@const op = dr.open}
 			{@const sweep = c[0] * op[1] - c[1] * op[0] > 0 ? 1 : 0}
 			{@const arc = `A${dr.w} ${dr.w} 0 0 ${sweep} ${dr.openEnd.join(' ')}`}
+			{@const clearArc = `A${dr.w} ${dr.w} 0 0 ${sweep} ${dr.clearEnd.join(' ')}`}
 			{@const leaf = [
 				[hx, hy],
 				[hx + op[0] * dr.w, hy + op[1] * dr.w],
@@ -380,7 +381,7 @@
 			] as Point[]}
 			<path
 				class={['sector', blocked.has(dr.name) && 'blocked']}
-				d="M{hx} {hy}L{dr.closedEnd.join(' ')}{arc}Z"
+				d="M{hx} {hy}L{dr.closedEnd.join(' ')}{clearArc}Z"
 			/>
 			<path class="arc" vector-effect="non-scaling-stroke" d="M{dr.closedEnd.join(' ')}{arc}" />
 			<polygon

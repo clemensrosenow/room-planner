@@ -1,5 +1,8 @@
 import type { Hinge, Point, RoomConfig, Swing } from './types';
 
+/** Degrees a door must be able to open: a Piece in this part of its swing blocks it. */
+export const MIN_OPEN = 45;
+
 export interface Door {
 	key: 'door' | 'balcony';
 	name: string;
@@ -21,6 +24,8 @@ export interface Door {
 	open: Point;
 	closedEnd: Point;
 	openEnd: Point;
+	/** End of the leaf opened MIN_OPEN degrees */
+	clearEnd: Point;
 }
 
 /**
@@ -268,6 +273,7 @@ function makeDoor(
 	const hy = inward ? y : y + outSign * t;
 	const closed: Point = left ? [1, 0] : [-1, 0];
 	const open: Point = inward ? [0, -outSign] : [0, outSign];
+	const [c, s] = [Math.cos((MIN_OPEN * Math.PI) / 180), Math.sin((MIN_OPEN * Math.PI) / 180)];
 	return {
 		key,
 		name,
@@ -283,7 +289,8 @@ function makeDoor(
 		closed,
 		open,
 		closedEnd: [hx + closed[0] * w, hy],
-		openEnd: [hx, hy + open[1] * w]
+		openEnd: [hx, hy + open[1] * w],
+		clearEnd: [hx + (closed[0] * c + open[0] * s) * w, hy + (closed[1] * c + open[1] * s) * w]
 	};
 }
 

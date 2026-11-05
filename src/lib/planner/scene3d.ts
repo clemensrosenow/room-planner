@@ -6,7 +6,7 @@ import { currentScreen, isPhone } from '../preview/quality';
 import { modelInfo } from './catalog';
 import { cssVar } from './format';
 import { elevation, footprint, type FurnitureCheck } from './furniture';
-import { buildWalls, type Geometry } from './geometry';
+import { buildWalls, MIN_OPEN, type Geometry } from './geometry';
 import type { Furniture, Point } from './types';
 
 export interface SceneEvents {
@@ -16,6 +16,8 @@ export interface SceneEvents {
 	onDrag: (id: string, cx: number, cy: number, snap: boolean) => void;
 	/** Screen position (px, relative to the canvas) above the selected piece, every frame it moves */
 	onAnchor?: (p: { x: number; y: number } | null) => void;
+	/** Furniture rebuilt and every real model shown (or failed to load) */
+	onSettled?: () => void;
 }
 
 const color = (v: string) => new THREE.Color(cssVar(v));
@@ -264,7 +266,7 @@ export class RoomScene {
 				{ edges: edgeMat }
 			);
 
-		// Doors: leaf standing fully open, plus swing area on the floor
+		// Doors: leaf standing fully open, its arc, and the part of the swing that must stay free
 		const leafMat = new THREE.MeshStandardMaterial({ color: color('--wall3d'), roughness: 0.7 });
 		this.sectors.clear();
 		const arcMat = new THREE.LineBasicMaterial({
@@ -277,17 +279,20 @@ export class RoomScene {
 			const c = dr.closed;
 			const op = dr.open;
 			const w = dr.w;
-			const arc: Point[] = [];
-			for (let k = 0; k <= 32; k++) {
-				const a = ((k / 32) * Math.PI) / 2;
-				arc.push([
-					hx + (c[0] * Math.cos(a) + op[0] * Math.sin(a)) * w,
-					hy + (c[1] * Math.cos(a) + op[1] * Math.sin(a)) * w
-				]);
-			}
+			/** Points along the arc the leaf's end sweeps, from closed to `deg` open */
+			const arcTo = (deg: number) =>
+				Array.from({ length: 33 }, (_, k): Point => {
+					const a = ((k / 32) * deg * Math.PI) / 180;
+					return [
+						hx + (c[0] * Math.cos(a) + op[0] * Math.sin(a)) * w,
+						hy + (c[1] * Math.cos(a) + op[1] * Math.sin(a)) * w
+					];
+				});
+			const arc = arcTo(90);
+			// Only the part of the swing the door must be able to open is shaded
 			const sh = new THREE.Shape();
 			sh.moveTo(hx, -hy);
-			arc.forEach((p) => sh.lineTo(p[0], -p[1]));
+			arcTo(MIN_OPEN).forEach((p) => sh.lineTo(p[0], -p[1]));
 			sh.closePath();
 			const sg = new THREE.ShapeGeometry(sh);
 			sg.rotateX(-Math.PI / 2);
@@ -435,9 +440,12 @@ export class RoomScene {
 		this.setPositions(furn);
 
 		// loadModel never rejects; a model that failed stays a stand-in and brings no rebuild
-		if (missing.size)
+		if (!missing.size) this.events.onSettled?.();
+		else
 			Promise.all([...missing].map(loadModel)).then((ok) => {
-				if (ok.some(Boolean) && this.builds === build) this.setFurniture(furn);
+				if (this.builds !== build) return;
+				if (ok.some(Boolean)) this.setFurniture(furn);
+				else this.events.onSettled?.();
 			});
 	}
 

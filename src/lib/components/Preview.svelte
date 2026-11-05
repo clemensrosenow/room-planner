@@ -10,6 +10,7 @@
 	import FloatingBar from './ui/FloatingBar.svelte';
 	import Icon from './ui/Icon.svelte';
 	import IconButton from './ui/IconButton.svelte';
+	import Loader from './ui/Loader.svelte';
 
 	interface Props {
 		/** Pieces to show; the Draft when omitted */
@@ -22,6 +23,8 @@
 	let { furn, defaultShot = 'above', hint = true }: Props = $props();
 
 	const DEFAULT_TIME = 10;
+	/** The loader gives up waiting for slow models after this many ms */
+	const LOAD_TIMEOUT = 8000;
 
 	/** "18h30" (or "18:30") → 18.5, clamped to the slider range */
 	function parseTime(v: string | null) {
@@ -38,6 +41,8 @@
 	let container: HTMLDivElement;
 	let scene = $state<PreviewScene | null>(null);
 	let failed = $state(false);
+	/** Every real model is in, or loading took too long to keep waiting */
+	let ready = $state(false);
 
 	let mode = $state<CameraMode>('walk');
 	// svelte-ignore state_referenced_locally
@@ -61,7 +66,12 @@
 		scene.onModeChange = (m) => (mode = m);
 		// Walking away from a viewpoint unselects it
 		scene.onManual = () => (activeShot = '');
-		return () => scene?.dispose();
+		scene.onSettled = () => (ready = true);
+		const timer = setTimeout(() => (ready = true), LOAD_TIMEOUT);
+		return () => {
+			clearTimeout(timer);
+			scene?.dispose();
+		};
 	});
 
 	// Rebuild when the room or furniture changes; the first build places the camera
@@ -146,7 +156,7 @@
 
 <div
 	bind:this={wrap}
-	class={['relative h-full w-full bg-[#1c1a17]', hideUi && 'cursor-none']}
+	class={['relative isolate h-full w-full bg-[#1c1a17]', hideUi && 'cursor-none']}
 	onpointermove={wake}
 	role="presentation"
 >
@@ -235,4 +245,7 @@
 			</FloatingBar>
 		</div>
 	{/if}
+
+	<!-- Last, so it covers the controls too -->
+	<Loader show={!ready && !failed} />
 </div>

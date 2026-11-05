@@ -4,6 +4,7 @@
 	import type { Point } from '#lib/planner/types.ts';
 	import { selectItem } from '#lib/url.ts';
 	import { onMount, untrack } from 'svelte';
+	import Loader from './ui/Loader.svelte';
 
 	interface Props {
 		/** Screen position above the selected piece (px within this view) */
@@ -14,6 +15,13 @@
 	let container: HTMLDivElement;
 	let scene = $state<RoomScene | null>(null);
 	let failed = $state(false);
+	/**
+	 * Real models are in, or took too long. Only the first load shows the loader: models of
+	 * Pieces dragged in later must not cover the view mid-drag
+	 */
+	let ready = $state(false);
+	/** The loader gives up waiting for slow models after this many ms */
+	const LOAD_TIMEOUT = 8000;
 	/** Bumped when colors or fonts change, so everything gets rebuilt */
 	let styleVersion = $state(0);
 
@@ -27,19 +35,22 @@
 			scene = new RoomScene(container, {
 				onSelect: (id) => selectItem(id),
 				onDrag: (id, cx, cy, snap) => planner.move(id, cx, cy, snap),
-				onAnchor: (p) => onanchor?.(p)
+				onAnchor: (p) => onanchor?.(p),
+				onSettled: () => (ready = true)
 			});
 		} catch {
 			failed = true;
 			return;
 		}
 		scene.fitCamera(planner.geo);
+		const timer = setTimeout(() => (ready = true), LOAD_TIMEOUT);
 
 		const dark = window.matchMedia('(prefers-color-scheme: dark)');
 		const restyle = () => styleVersion++;
 		dark.addEventListener('change', restyle);
 		document.fonts?.ready.then(restyle);
 		return () => {
+			clearTimeout(timer);
 			dark.removeEventListener('change', restyle);
 			scene?.dispose();
 		};
@@ -89,10 +100,13 @@
 	$effect(() => scene?.setBlockedDoors(blockedDoors()));
 </script>
 
-<div bind:this={container} class="h-full w-full">
-	{#if failed}
-		<div class="grid h-full place-items-center p-5 text-center text-muted">
-			3D is not supported by this browser. The floor plan still works.
-		</div>
-	{/if}
+<div class="relative isolate h-full w-full">
+	<div bind:this={container} class="h-full w-full">
+		{#if failed}
+			<div class="grid h-full place-items-center p-5 text-center text-muted">
+				3D is not supported by this browser. The floor plan still works.
+			</div>
+		{/if}
+	</div>
+	<Loader show={!ready && !failed} tone="scene" />
 </div>

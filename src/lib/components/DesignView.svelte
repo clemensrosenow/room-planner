@@ -15,6 +15,7 @@
 	import ConfirmButton from './ui/ConfirmButton.svelte';
 	import Dialog from './ui/Dialog.svelte';
 	import Icon from './ui/Icon.svelte';
+	import Loader from './ui/Loader.svelte';
 	import Segmented from './ui/Segmented.svelte';
 
 	/** A Published Design, read-only: 3D or plan, its Rank and Duel record, Remix and Delete. */
@@ -89,7 +90,9 @@
 	{#if mounted && view === '3d'}
 		<!-- Only rendered while shown; the viewpoint survives in ?shot=. Loaded on demand, so
 		     the plan view doesn't download three.js -->
-		{#await import('./Preview.svelte') then { default: Preview }}
+		{#await import('./Preview.svelte')}
+			<Loader />
+		{:then { default: Preview }}
 			<Preview {furn} defaultShot="above" hint={false} />
 		{/await}
 	{:else if view === 'plan'}

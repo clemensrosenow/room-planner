@@ -3,6 +3,7 @@
 	import { afterNavigate, onNavigate } from '$app/navigation';
 	import favicon from '#lib/assets/favicon.svg';
 	import Header from '#lib/components/Header.svelte';
+	import NavProgress from '#lib/components/ui/NavProgress.svelte';
 	import Toaster from '#lib/components/ui/Toaster.svelte';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { page } from '$app/state';
@@ -64,4 +65,5 @@
 		{@render children()}
 	</main>
 </div>
+<NavProgress />
 <Toaster />
