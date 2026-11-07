@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import { STEPS } from '#lib/url.ts';
 	import PublishButton from './PublishButton.svelte';
@@ -10,6 +10,12 @@
 	/** Undo and redo belong to the Draft, so only its pages show them */
 	const editing = $derived(STEPS.some((s) => s.path === page.url.pathname));
 	const onDesigns = $derived(page.url.pathname === '/designs');
+	const pendingPath = $derived(
+		navigating.to?.url.pathname !== navigating.from?.url.pathname
+			? navigating.to?.url.pathname
+			: undefined
+	);
+	const pendingStep = $derived(STEPS.find((s) => s.path === pendingPath));
 	const onDuel = $derived(page.url.pathname === '/duel');
 
 	/** Steps 1 and 2; on phones only the current one shows its label next to its number */
@@ -42,15 +48,25 @@
 			<ol class="flex items-center gap-0.5 max-sm:gap-0" aria-label="Steps">
 				{#each STEPS as s, i (s.path)}
 					{@const current = page.url.pathname === s.path}
+					{@const pending = pendingPath === s.path}
 					<li>
 						<a
 							href={s.path}
 							class={step(current)}
 							aria-current={current ? 'page' : undefined}
 							aria-label={current ? undefined : s.label}
+							aria-busy={pending}
 						>
-							<span class={number(current)} aria-hidden="true">{i + 1}</span>
-							<span class={[!current && 'max-sm:hidden']}>{s.label}</span>
+							<span class={number(current)} aria-hidden="true">
+								{#if pending}
+									<span
+										class="size-3.5 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin"
+									></span>
+								{:else}
+									{i + 1}
+								{/if}
+							</span>
+							<span class={[!current && !pending && 'max-sm:hidden']}>{s.label}</span>
 						</a>
 					</li>
 					<li class="text-line-strong" aria-hidden="true">
@@ -81,6 +97,7 @@
 			</a>
 		</FloatingBar>
 	</nav>
+	<span class="sr-only" role="status">{pendingStep ? `Loading ${pendingStep.label}…` : ''}</span>
 
 	<div class="flex items-center justify-end gap-2 max-md:ml-auto md:flex-1">
 		{#if editing}

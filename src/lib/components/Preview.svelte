@@ -2,7 +2,9 @@
 	import { page } from '$app/state';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Furniture } from '#lib/planner/types.ts';
-	import { PreviewScene, type CameraMode } from '#lib/preview/PreviewScene.ts';
+	import { previewModelIds } from '#lib/preview/modelIds.ts';
+	import { modelUrl } from '#lib/preview/modelUrl.ts';
+	import type { PreviewScene, CameraMode } from '#lib/preview/PreviewScene.ts';
 	import { makeShots } from '#lib/preview/shots.ts';
 	import { dayGradient, dayOfYear, formatTime, sunDirection } from '#lib/preview/sun.ts';
 	import { setParams } from '#lib/url.ts';
@@ -41,7 +43,7 @@
 	let container: HTMLDivElement;
 	let scene = $state<PreviewScene | null>(null);
 	let failed = $state(false);
-	/** Every real model is in, or loading took too long to keep waiting */
+	/** Models (or timeout stand-ins) and lighting programs are prepared */
 	let ready = $state(false);
 
 	let mode = $state<CameraMode>('walk');
@@ -50,27 +52,80 @@
 	let hours = $state(parseTime(params.get('time')));
 	let lamp = $state(params.get('lamp') === '1');
 
+	const modelIds = $derived(previewModelIds(planner.geo, furn ?? planner.furn));
+	let preloadModels = $state(false);
 	const shots = $derived(makeShots(planner.geo));
 	const corners = $derived(shots.filter((s) => s.id.startsWith('corner')));
 	const isDay = $derived(sunDirection(hours, dayOfYear()).y > -0.03);
 	/** Slider track colored by today's real sun path */
 	const track = dayGradient();
+	let loadTimer: ReturnType<typeof setTimeout> | undefined;
+	let reveal: () => Promise<void> = async () => {};
 
 	onMount(() => {
-		try {
-			scene = new PreviewScene(container);
-		} catch {
-			failed = true;
-			return;
+		let disposed = false;
+		const frames = new Set<number>();
+		let instance: PreviewScene | null = null;
+
+		function nextFrame() {
+			return new Promise<void>((resolve) => {
+				const frame = requestAnimationFrame(() => {
+					frames.delete(frame);
+					resolve();
+				});
+				frames.add(frame);
+			});
 		}
-		scene.onModeChange = (m) => (mode = m);
-		// Walking away from a viewpoint unselects it
-		scene.onManual = () => (activeShot = '');
-		scene.onSettled = () => (ready = true);
-		const timer = setTimeout(() => (ready = true), LOAD_TIMEOUT);
+
+		async function paintLoader() {
+			await nextFrame();
+			if (!disposed) await nextFrame();
+			return !disposed;
+		}
+
+		reveal = async () => {
+			const s = instance;
+			if (!s || disposed || (ready && s.isPrepared)) return;
+			clearTimeout(loadTimer);
+			ready = false;
+			try {
+				if ((await paintLoader()) && (await s.prepare()) && !disposed) {
+					clearTimeout(loadTimer);
+					ready = true;
+				}
+			} catch {
+				if (!disposed) failed = true;
+			}
+		};
+
+		async function initialize() {
+			try {
+				if (!(await paintLoader())) return;
+				// Queue critical renderer modules first, then overlap model downloads. Starting
+				// every GLB earlier can occupy all HTTP/1 connections and delay those modules.
+				const rendererModule = import('#lib/preview/PreviewScene.ts');
+				preloadModels = true;
+				const { PreviewScene } = await rendererModule;
+				if (disposed) return;
+				instance = new PreviewScene(container);
+				instance.onModeChange = (m) => (mode = m);
+				instance.onManual = () => (activeShot = '');
+				instance.onSettled = () => untrack(() => void reveal());
+				scene = instance;
+			} catch {
+				if (!disposed) failed = true;
+			}
+		}
+
+		// Paint the loader before importing renderer code, constructing WebGL or building the Room.
+		void initialize();
+
 		return () => {
-			clearTimeout(timer);
-			scene?.dispose();
+			disposed = true;
+			for (const frame of frames) cancelAnimationFrame(frame);
+			frames.clear();
+			clearTimeout(loadTimer);
+			instance?.dispose();
 		};
 	});
 
@@ -79,6 +134,9 @@
 	$effect(() => {
 		const s = scene;
 		if (!s) return;
+		ready = false;
+		clearTimeout(loadTimer);
+		loadTimer = setTimeout(() => void reveal(), LOAD_TIMEOUT);
 		s.build(planner.geo, $state.snapshot(furn ?? planner.furn));
 		if (placed) return;
 		placed = true;
@@ -153,6 +211,19 @@
 		active ? 'bg-ink text-sheet' : 'text-muted hover:text-ink'
 	];
 </script>
+
+<svelte:head>
+	<!-- Start model downloads while renderer code loads; reuse GLTFLoader's anonymous fetches. -->
+	{#each preloadModels ? modelIds : [] as id (id)}
+		<link
+			rel="preload"
+			as="fetch"
+			href={modelUrl(id)}
+			crossorigin="anonymous"
+			fetchpriority="low"
+		/>
+	{/each}
+</svelte:head>
 
 <div
 	bind:this={wrap}

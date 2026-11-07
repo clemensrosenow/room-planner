@@ -5,14 +5,14 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import { furnitureKind, modelInfo, MODELS } from '../planner/catalog';
 import { elevation } from '../planner/furniture';
 import { buildWalls, floorRects, type Geometry } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
+import { batchStaticMeshes } from './batchStaticMeshes';
+import { AntialiasedRenderPass } from './AntialiasedRenderPass';
 import * as mat from './materials';
 import { loadModel, modelClone } from './modelLoader';
 import { buildLoggiaSet, buildPiece, MaterialKit } from './models';
@@ -43,7 +43,8 @@ const IDLE_FRAME_MS = 1000 / 15;
 
 /** Replaces NaN/Infinity with black and caps extreme HDR values. */
 const SanitizeShader = {
-	uniforms: { tDiffuse: { value: null } },
+	defines: { USE_AO: 1 },
+	uniforms: { tScene: { value: null }, tAO: { value: null } },
 	vertexShader: /* glsl */ `
 		varying vec2 vUv;
 		void main() {
@@ -51,10 +52,14 @@ const SanitizeShader = {
 			gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 		}`,
 	fragmentShader: /* glsl */ `
-		uniform sampler2D tDiffuse;
+		uniform sampler2D tScene;
+		uniform sampler2D tAO;
 		varying vec2 vUv;
 		void main() {
-			vec4 c = texture2D(tDiffuse, vUv);
+			vec4 c = texture2D(tScene, vUv);
+			#if USE_AO
+			c.rgb *= mix(vec3(1.0), texture2D(tAO, vUv).rgb, 0.7);
+			#endif
 			if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0);
 			gl_FragColor = vec4(min(c.rgb, vec3(64.0)), c.a);
 		}`
@@ -97,6 +102,12 @@ export class PreviewScene {
 
 	private renderer: THREE.WebGLRenderer;
 	private composer: EffectComposer;
+	private beauty: AntialiasedRenderPass;
+	private buildVersion = 0;
+	private preparedVersion = -1;
+	private preparation: Promise<boolean> | null = null;
+	private preparing = false;
+	private disposed = false;
 	private scene = new THREE.Scene();
 	private camera = new THREE.PerspectiveCamera(55, 1, 0.05, 3000);
 	private controls: OrbitControls;
@@ -121,6 +132,7 @@ export class PreviewScene {
 	private lampOn = false;
 	private daylight = 1;
 	private bloom: UnrealBloomPass;
+	private ao: GTAOPass | null = null;
 	private lamp = new THREE.PointLight(0xffd6a6, 0, 0, 2);
 	private lampShade = new THREE.MeshStandardMaterial({
 		color: 0xffffff,
@@ -160,10 +172,11 @@ export class PreviewScene {
 
 	constructor(private el: HTMLElement) {
 		const r = (this.renderer = new THREE.WebGLRenderer({
-			antialias: true,
+			antialias: false,
 			preserveDrawingBuffer: false
 		}));
-		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.25 : 1.5));
+		// Bound supersampling while retaining geometry MSAA and native CSS detail.
+		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.2 : 1.25));
 		r.shadowMap.enabled = true;
 		r.shadowMap.type = THREE.PCFShadowMap;
 		// Nothing moves in the room: shadows are only redrawn after a change (see invalidate)
@@ -173,6 +186,24 @@ export class PreviewScene {
 		r.toneMappingExposure = 1;
 		r.domElement.className = 'block h-full w-full touch-none';
 		el.appendChild(r.domElement);
+
+		// Packed HDR halves color bandwidth on phones; retain RGBA16F on unsupported GPUs.
+		const gl = r.getContext();
+		const hdrSamples =
+			this.phone &&
+			gl instanceof WebGL2RenderingContext &&
+			r.extensions.has('EXT_color_buffer_float')
+				? (gl.getInternalformatParameter(
+						gl.RENDERBUFFER,
+						gl.R11F_G11F_B10F,
+						gl.SAMPLES
+					) as Int32Array | null)
+				: null;
+		const compactHDR = hdrSamples?.some((samples) => samples >= 2) ?? false;
+		const hdr = {
+			type: compactHDR ? THREE.UnsignedInt101111Type : THREE.HalfFloatType,
+			format: compactHDR ? THREE.RGBFormat : THREE.RGBAFormat
+		} satisfies THREE.RenderTargetOptions;
 
 		this.root.scale.setScalar(0.01);
 		this.scene.add(this.root);
@@ -184,6 +215,7 @@ export class PreviewScene {
 			u.rayleigh.value = 1.2;
 			u.cloudCoverage.value = 0.3;
 		}
+		this.sky.renderOrder = 1; // Shade only sky pixels left uncovered by opaque geometry
 		this.sky.scale.setScalar(1000);
 		this.scene.add(this.sky);
 		const ground = new THREE.Mesh(
@@ -232,28 +264,52 @@ export class PreviewScene {
 		// Phones get 2× MSAA and no ambient occlusion, which renders the whole scene once more
 		this.composer = new EffectComposer(
 			r,
-			new THREE.WebGLRenderTarget(1, 1, {
-				type: THREE.HalfFloatType,
-				samples: this.phone ? 2 : 4
-			})
+			new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false })
 		);
-		this.composer.addPass(new RenderPass(this.scene, this.camera));
+		const beauty = (this.beauty = new AntialiasedRenderPass(
+			this.scene,
+			this.camera,
+			this.phone ? 2 : 4,
+			hdr
+		));
+		this.composer.addPass(beauty);
 		if (!this.phone) {
-			const ao = new GTAOPass(this.scene, this.camera, 1, 1);
+			const ao = (this.ao = new GTAOPass(this.scene, this.camera, 1, 1));
 			ao.updateGtaoMaterial({ radius: 0.25, distanceExponent: 1.5, thickness: 1, scale: 1 });
-			ao.blendIntensity = 0.7;
+			// Composite AO with HDR sanitizing below, avoiding GTAO’s two full-resolution copies.
+			ao.output = GTAOPass.OUTPUT.Off;
+			ao.needsSwap = false;
 			this.composer.addPass(ao);
 		}
 		// The sky shader can produce NaN or huge values at sunset; bloom would smear them
 		// over the whole frame, so they are cleaned up first
-		this.composer.addPass(new ShaderPass(SanitizeShader));
+		const composite = new ShaderPass(SanitizeShader);
+		composite.uniforms.tScene.value = beauty.texture;
+		composite.material.defines.USE_AO = this.ao ? 1 : 0;
+		composite.uniforms.tAO.value = this.ao?.gtaoMap ?? null;
+		this.composer.addPass(composite);
 		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.12, 0.4, 1.6);
+		if (compactHDR) {
+			for (const target of [
+				this.bloom.renderTargetBright,
+				...this.bloom.renderTargetsHorizontal,
+				...this.bloom.renderTargetsVertical
+			]) {
+				target.texture.type = hdr.type;
+				target.texture.format = hdr.format;
+			}
+		}
 		this.composer.addPass(this.bloom);
-		this.composer.addPass(new OutputPass());
-		const vignette = new ShaderPass(VignetteShader);
-		vignette.uniforms.offset.value = 0.9;
-		vignette.uniforms.darkness.value = 0.85;
-		this.composer.addPass(vignette);
+		const output = new OutputPass();
+		// Same vignette in display color space, folded into the output pass.
+		output.material.fragmentShader = output.material.fragmentShader.replace(
+			/}\s*$/,
+			`
+			vec2 uv = (vUv - vec2(0.5)) * 0.9;
+			gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.15), dot(uv, uv));
+		}`
+		);
+		this.composer.addPass(output);
 
 		// Only used for the overview: orbit above the room, never down past the walls
 		this.controls = new OrbitControls(this.camera, r.domElement);
@@ -277,7 +333,12 @@ export class PreviewScene {
 			const now = performance.now();
 			const dt = Math.min((now - this.lastTime) / 1000, 0.1);
 			this.lastTime = now;
-			if (!this.el.offsetParent) {
+			if (
+				!this.el.offsetParent ||
+				this.preparing ||
+				this.preparedVersion !== this.buildVersion ||
+				!this.geo
+			) {
 				this.dirty = true;
 				return;
 			}
@@ -291,7 +352,7 @@ export class PreviewScene {
 			this.rendered = now;
 			this.composer.render();
 		};
-		loop();
+		this.frame = requestAnimationFrame(loop);
 	}
 
 	/** Draws the next frame in full, with fresh shadows when `shadows` is set. */
@@ -312,15 +373,23 @@ export class PreviewScene {
 	}
 
 	dispose() {
+		this.disposed = true;
+		this.last = null; // Pending model loads must not rebuild a disposed preview
 		cancelAnimationFrame(this.frame);
 		this.resizeObserver.disconnect();
 		this.controls.dispose();
 		this.walk.dispose();
 		this.clearLamps();
+		this.sun.dispose();
+		this.lamp.dispose();
 		disposeTree(this.scene);
 		disposeTree(this.envScene);
 		this.envTarget?.dispose();
 		this.pmrem.dispose();
+		for (const pass of this.composer.passes) pass.dispose();
+		// These materials are omitted by GTAOPass.dispose() in the current three.js version.
+		this.ao?.gtaoMaterial.dispose();
+		this.ao?.blendMaterial.dispose();
 		this.composer.dispose();
 		this.renderer.dispose();
 		// Browsers allow only a few live WebGL contexts (iOS Safari about 16): free it now
@@ -333,6 +402,9 @@ export class PreviewScene {
 		const h = this.el.clientHeight || 1;
 		this.renderer.setSize(w, h, false);
 		this.composer.setSize(w, h);
+		// Broad contact shading needs fewer pixels; keep geometry and final color at full resolution.
+		const ratio = this.renderer.getPixelRatio();
+		this.ao?.setSize(Math.ceil((w * ratio) / 2), Math.ceil((h * ratio) / 2));
 		this.bloom.resolution.set(w, h);
 		this.camera.aspect = w / h;
 		this.updateFov(1);
@@ -364,6 +436,8 @@ export class PreviewScene {
 	/* ---------- Room ---------- */
 
 	build(g: Geometry, furn: Furniture[]) {
+		this.buildVersion++;
+		this.root.matrixAutoUpdate = this.root.matrixWorldAutoUpdate = true;
 		this.geo = g;
 		this.last = { g, furn };
 		this.clearLamps();
@@ -613,6 +687,15 @@ export class PreviewScene {
 		const size = Math.max(g.W, g.L) / 100;
 		this.controls.minDistance = Math.max(size, (g.H / 100 + 0.5) / Math.cos(OVERVIEW_MAX_POLAR));
 		this.controls.maxDistance = Math.max(size * 2.5, this.controls.minDistance * 1.5);
+		// Batch only owned opaque siblings; roof visibility and shared model resources remain independent.
+		const roof = new Set(this.roof);
+		grp.traverse((parent) => batchStaticMeshes(parent, roof));
+		// Pieces only move on rebuild. Cache their world transforms, including shared model clones.
+		grp.updateWorldMatrix(true, true);
+		grp.traverse((object) => {
+			object.matrixAutoUpdate = false;
+			object.matrixWorldAutoUpdate = false;
+		});
 		this.updateFov(1);
 		this.invalidate(true);
 
@@ -626,10 +709,107 @@ export class PreviewScene {
 			});
 	}
 
+	/** Whether the current build is ready to interact with. */
+	get isPrepared() {
+		return !this.disposed && !this.preparing && this.preparedVersion === this.buildVersion;
+	}
+
+	/** Prepare first-use lighting and shadow programs before revealing the controls. */
+	prepare(): Promise<boolean> {
+		if (this.disposed) return Promise.resolve(false);
+		if (this.preparation) return this.preparation;
+		if (this.preparedVersion === this.buildVersion) return Promise.resolve(true);
+		this.preparing = true;
+		const prepareLatest = async () => {
+			// A late model or an edit can rebuild while shader compilation yields.
+			// Every caller waits for the latest Room, including the timeout fallback.
+			while (!this.disposed && this.preparedVersion !== this.buildVersion) {
+				const version = this.buildVersion;
+				if (await this.prepareLighting(version)) this.preparedVersion = version;
+			}
+			return !this.disposed;
+		};
+		this.preparation = prepareLatest().finally(() => {
+			this.preparing = false;
+			this.preparation = null;
+			if (!this.disposed) {
+				// Public setters keep the latest requested state while compilation yields.
+				this.applyTime(this.hours);
+				this.applyLamp(this.lampOn);
+				this.update(0);
+				this.invalidate(true);
+				if (this.preparedVersion === this.buildVersion) {
+					this.updateEnvironment(performance.now());
+					this.composer.render();
+				}
+			}
+		});
+		return this.preparation;
+	}
+
+	private async prepareLighting(version: number) {
+		const current = () => !this.disposed && version === this.buildVersion;
+		const yieldTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+		// Finish the mount/build effects (including camera placement), leaving the loader painted.
+		await yieldTask();
+		if (!current()) return false;
+		this.updateEnvironment(performance.now());
+		const states = new Map<string, { hours: number; lamp: boolean }>();
+		// Only visibility/shadow counts change shader code. Cover the slider's entire range,
+		// deduplicating its many uniform-only changes into a handful of shader variants.
+		for (const lamp of [false, true]) {
+			for (let hours = 5; hours <= 21.5; hours += 0.25) {
+				this.applyTime(hours);
+				this.applyLamp(lamp);
+				const key = [this.sun.visible, this.windowLight.visible, this.bounce.visible, lamp].join(
+					'/'
+				);
+				if (!states.has(key)) states.set(key, { hours, lamp });
+			}
+		}
+		const roof = this.roof.map((object) => ({ object, visible: object.visible }));
+		try {
+			// Warm the same programs without shading full-size images behind the loader.
+			// Shadow maps retain their real sizes; final color/AO buffers are restored below.
+			this.composer.setSize(32, 32);
+			// Compile ceiling materials too, even when the starting camera is above the Room.
+			for (const { object } of roof) object.visible = true;
+			// Submit every variant before waiting. compile() queues programs without using
+			// them, allowing the driver to compile independent lighting states in parallel.
+			// Keep the readiness checks below sequential: compileAsync tracks each material's
+			// current program, which must stay unchanged while its promise is pending.
+			for (const state of states.values()) {
+				if (!current()) return false;
+				this.applyTime(state.hours);
+				this.applyLamp(state.lamp);
+				this.beauty.compile(this.renderer);
+				await yieldTask();
+			}
+			for (const state of states.values()) {
+				if (!current()) return false;
+				this.applyTime(state.hours);
+				this.applyLamp(state.lamp);
+				await this.beauty.compileAsync(this.renderer);
+				if (!current()) return false;
+				// Allocate shadow faces and prepare depth/postprocessing programs behind the loader.
+				this.composer.render();
+				await yieldTask();
+			}
+			return current();
+		} finally {
+			for (const { object, visible } of roof) object.visible = visible;
+			if (!this.disposed) this.resize();
+		}
+	}
+
 	/* ---------- Lighting ---------- */
 
 	setTime(hours: number) {
 		this.hours = hours;
+		if (!this.preparing) this.applyTime(hours);
+	}
+
+	private applyTime(hours: number) {
 		const dir = sunDirection(hours, dayOfYear());
 		const light = sunLight(dir.y);
 		this.sun.color.copy(light.color);
@@ -647,6 +827,7 @@ export class PreviewScene {
 		const high = THREE.MathUtils.smoothstep(dir.y, 0, 0.4);
 		this.windowLight.color.setRGB(1, 0.8, 0.62).lerp(new THREE.Color(0.95, 0.97, 1), high);
 		this.windowLight.intensity = 3.2 * light.daylight;
+		this.windowLight.visible = this.windowLight.intensity > 0;
 
 		// The glass front faces east (+z); sunlight only enters while the sun is on that side
 		const g = this.geo;
@@ -664,6 +845,7 @@ export class PreviewScene {
 			this.bounce.intensity = 0;
 		}
 
+		this.bounce.visible = this.bounce.intensity > 0;
 		this.daylight = light.daylight;
 		this.updateBounce();
 		this.invalidate(true);
@@ -683,13 +865,19 @@ export class PreviewScene {
 	/** Switches all lights: the placed lamps, or the built-in ceiling light without any. */
 	setLamp(on: boolean) {
 		this.lampOn = on;
+		if (!this.preparing) this.applyLamp(on);
+	}
+
+	private applyLamp(on: boolean) {
 		const builtIn = this.lampLights.length === 0;
 		this.lamp.intensity = on && builtIn ? 18 : 0;
+		this.lamp.visible = on && builtIn;
 		// A point light's shadow draws the scene six times: only while the lights are on, and
 		// only for the brightest lamp
 		this.lamp.castShadow = on && builtIn;
 		for (const [i, l] of this.lampLights.entries()) {
 			l.intensity = on ? l.userData.intensity : 0;
+			l.visible = on;
 			l.castShadow = on && i === 0;
 		}
 		this.lampShade.emissiveIntensity = on ? 2.5 : 0;
@@ -860,8 +1048,11 @@ export class PreviewScene {
 		// Look into the room (and the loggia) from above
 		if (this.geo) {
 			const inside = this.camera.position.y < this.geo.H / 100 + 0.02;
-			for (const o of this.roof)
-				o.visible = inside && (o !== this.shade || !this.lampLights.length);
+			for (const o of this.roof) {
+				const visible = inside && (o !== this.shade || !this.lampLights.length);
+				if (o.visible !== visible) this.invalidate(true);
+				o.visible = visible;
+			}
 		}
 	}
 
@@ -926,6 +1117,7 @@ function disposeTree(obj: THREE.Object3D) {
 		if (o === obj && obj.type === 'Scene') return;
 		// Real models share geometry and materials with the loader's cache
 		if (o.userData.shared) return;
+		if (mesh instanceof THREE.InstancedMesh) mesh.dispose();
 		mesh.geometry?.dispose();
 		const mats = Array.isArray(mesh.material)
 			? mesh.material
@@ -954,7 +1146,7 @@ function surroundings() {
 		(color) => new THREE.MeshStandardMaterial({ color, roughness: 1 })
 	);
 	const bark = new THREE.MeshStandardMaterial({ color: 0x5a4a3c, roughness: 1 });
-	const blob = new THREE.IcosahedronGeometry(1, 3);
+	const blob = new THREE.IcosahedronGeometry(1, 2);
 	const trunk = new THREE.CylinderGeometry(0.15, 0.25, 1, 6);
 	for (let i = 0; i < 70; i++) {
 		const angle = rnd() * Math.PI * 2;
@@ -976,6 +1168,7 @@ function surroundings() {
 			grp.add(b);
 		}
 	}
+	const building = new THREE.BoxGeometry(1, 1, 1);
 	const facades = [0xd9d2c5, 0xc9c3b8, 0xe4ddd0, 0xb8b2a8].map(
 		(color) => new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
 	);
@@ -984,10 +1177,28 @@ function surroundings() {
 		const dist = 75 + rnd() * 60;
 		const w = 14 + rnd() * 20;
 		const h = 10 + rnd() * 16;
-		const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 10 + rnd() * 8), facades[i % 4]);
+		const b = new THREE.Mesh(building, facades[i % 4]);
+		b.scale.set(w, h, 10 + rnd() * 8);
 		b.position.set(Math.cos(angle) * dist, -9 + h / 2, Math.sin(angle) * dist);
 		b.rotation.y = angle + Math.PI / 2;
 		grp.add(b);
+	}
+	// Instance by quadrant/material: fewer draws without duplicating tree vertex buffers.
+	const batches = new Map<string, THREE.Mesh<THREE.BufferGeometry, THREE.Material>[]>();
+	for (const child of grp.children) {
+		const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+		mesh.updateMatrix();
+		const key = `${Math.sign(mesh.position.x)}/${Math.sign(mesh.position.z)}/${mesh.material.uuid}`;
+		const batch = batches.get(key) ?? [];
+		batch.push(mesh);
+		batches.set(key, batch);
+	}
+	grp.clear();
+	for (const meshes of batches.values()) {
+		const batch = new THREE.InstancedMesh(meshes[0].geometry, meshes[0].material, meshes.length);
+		meshes.forEach((mesh, i) => batch.setMatrixAt(i, mesh.matrix));
+		batch.computeBoundingSphere();
+		grp.add(batch);
 	}
 	return grp;
 }

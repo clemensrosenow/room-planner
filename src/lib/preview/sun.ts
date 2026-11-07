@@ -4,13 +4,17 @@ import * as THREE from 'three';
 const LATITUDE = 51;
 const LONGITUDE = 10;
 
+// Reuse the formatter, not the offset: the date still selects the correct DST rule.
+let clockFormatter: Intl.DateTimeFormat | undefined;
+
 /** UTC offset of German clock time (CET +1, CEST +2) on a date. */
 function clockOffset(date: Date) {
 	try {
-		const s = date.toLocaleString('en-US', {
+		clockFormatter ??= new Intl.DateTimeFormat('en-US', {
 			timeZone: 'Europe/Berlin',
 			timeZoneName: 'shortOffset'
 		});
+		const s = clockFormatter.format(date);
 		const m = s.match(/GMT([+-]\d+)/);
 		if (m) return Number(m[1]);
 	} catch {
