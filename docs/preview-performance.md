@@ -1,5 +1,8 @@
 # Experience preview performance
 
+For the current phone-focused follow-up and its current-PR baseline, see
+[Mobile preview performance](mobile-preview-performance.md).
+
 > Historical measurements: the results below compare the original PR against
 > `94ad612`. PR #30 has since been rebased onto `07fa921` (latest main at rebase),
 > preserving its revised Inventory, UX, loading feedback, idle throttling and

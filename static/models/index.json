@@ -47,9 +47,9 @@
 			"h": 85.5
 		},
 		"mount": "ceiling",
-		"triangles": 90947,
+		"triangles": 19503,
 		"trianglesBefore": 113450,
-		"bytes": 576752
+		"bytes": 135404
 	},
 	{
 		"id": "ikea-markus-chair",
@@ -86,9 +86,9 @@
 			"h": 67.8
 		},
 		"mount": "floor",
-		"triangles": 92850,
+		"triangles": 20399,
 		"trianglesBefore": 406864,
-		"bytes": 767756
+		"bytes": 147572
 	},
 	{
 		"id": "radiator",

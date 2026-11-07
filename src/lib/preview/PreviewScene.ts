@@ -11,6 +11,7 @@ import { furnitureKind, modelInfo, MODELS } from '../planner/catalog';
 import { elevation } from '../planner/furniture';
 import { buildWalls, floorRects, type Geometry } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
+import { batchStaticMeshes } from './batchStaticMeshes';
 import { AntialiasedRenderPass } from './AntialiasedRenderPass';
 import * as mat from './materials';
 import { loadModel, modelClone } from './modelLoader';
@@ -169,7 +170,7 @@ export class PreviewScene {
 			preserveDrawingBuffer: false
 		}));
 		// Bound supersampling while retaining geometry MSAA and native CSS detail.
-		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.2 : 1.25));
 		r.shadowMap.enabled = true;
 		r.shadowMap.type = THREE.PCFShadowMap;
 		// Nothing moves in the room: shadows are only redrawn after a change (see invalidate)
@@ -179,6 +180,24 @@ export class PreviewScene {
 		r.toneMappingExposure = 1;
 		r.domElement.className = 'block h-full w-full touch-none';
 		el.appendChild(r.domElement);
+
+		// Packed HDR halves color bandwidth on phones; retain RGBA16F on unsupported GPUs.
+		const gl = r.getContext();
+		const hdrSamples =
+			this.phone &&
+			gl instanceof WebGL2RenderingContext &&
+			r.extensions.has('EXT_color_buffer_float')
+				? (gl.getInternalformatParameter(
+						gl.RENDERBUFFER,
+						gl.R11F_G11F_B10F,
+						gl.SAMPLES
+					) as Int32Array | null)
+				: null;
+		const compactHDR = hdrSamples?.some((samples) => samples >= 2) ?? false;
+		const hdr = {
+			type: compactHDR ? THREE.UnsignedInt101111Type : THREE.HalfFloatType,
+			format: compactHDR ? THREE.RGBFormat : THREE.RGBAFormat
+		} satisfies THREE.RenderTargetOptions;
 
 		this.root.scale.setScalar(0.01);
 		this.scene.add(this.root);
@@ -239,9 +258,9 @@ export class PreviewScene {
 		// Phones get 2× MSAA and no ambient occlusion, which renders the whole scene once more
 		this.composer = new EffectComposer(
 			r,
-			new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false })
+			new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false })
 		);
-		const beauty = new AntialiasedRenderPass(this.scene, this.camera, this.phone ? 2 : 4);
+		const beauty = new AntialiasedRenderPass(this.scene, this.camera, this.phone ? 2 : 4, hdr);
 		this.composer.addPass(beauty);
 		if (!this.phone) {
 			const ao = (this.ao = new GTAOPass(this.scene, this.camera, 1, 1));
@@ -259,6 +278,16 @@ export class PreviewScene {
 		composite.uniforms.tAO.value = this.ao?.gtaoMap ?? null;
 		this.composer.addPass(composite);
 		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.12, 0.4, 1.6);
+		if (compactHDR) {
+			for (const target of [
+				this.bloom.renderTargetBright,
+				...this.bloom.renderTargetsHorizontal,
+				...this.bloom.renderTargetsVertical
+			]) {
+				target.texture.type = hdr.type;
+				target.texture.format = hdr.format;
+			}
+		}
 		this.composer.addPass(this.bloom);
 		const output = new OutputPass();
 		// Same vignette in display color space, folded into the output pass.
@@ -390,6 +419,7 @@ export class PreviewScene {
 	/* ---------- Room ---------- */
 
 	build(g: Geometry, furn: Furniture[]) {
+		this.root.matrixAutoUpdate = this.root.matrixWorldAutoUpdate = true;
 		this.geo = g;
 		this.last = { g, furn };
 		this.clearLamps();
@@ -639,6 +669,15 @@ export class PreviewScene {
 		const size = Math.max(g.W, g.L) / 100;
 		this.controls.minDistance = Math.max(size, (g.H / 100 + 0.5) / Math.cos(OVERVIEW_MAX_POLAR));
 		this.controls.maxDistance = Math.max(size * 2.5, this.controls.minDistance * 1.5);
+		// Batch only owned opaque siblings; roof visibility and shared model resources remain independent.
+		const roof = new Set(this.roof);
+		grp.traverse((parent) => batchStaticMeshes(parent, roof));
+		// Pieces only move on rebuild. Cache their world transforms, including shared model clones.
+		grp.updateWorldMatrix(true, true);
+		grp.traverse((object) => {
+			object.matrixAutoUpdate = false;
+			object.matrixWorldAutoUpdate = false;
+		});
 		this.updateFov(1);
 		this.invalidate(true);
 
@@ -673,6 +712,7 @@ export class PreviewScene {
 		const high = THREE.MathUtils.smoothstep(dir.y, 0, 0.4);
 		this.windowLight.color.setRGB(1, 0.8, 0.62).lerp(new THREE.Color(0.95, 0.97, 1), high);
 		this.windowLight.intensity = 3.2 * light.daylight;
+		this.windowLight.visible = this.windowLight.intensity > 0;
 
 		// The glass front faces east (+z); sunlight only enters while the sun is on that side
 		const g = this.geo;
@@ -690,6 +730,7 @@ export class PreviewScene {
 			this.bounce.intensity = 0;
 		}
 
+		this.bounce.visible = this.bounce.intensity > 0;
 		this.daylight = light.daylight;
 		this.updateBounce();
 		this.invalidate(true);
@@ -711,11 +752,13 @@ export class PreviewScene {
 		this.lampOn = on;
 		const builtIn = this.lampLights.length === 0;
 		this.lamp.intensity = on && builtIn ? 18 : 0;
+		this.lamp.visible = on && builtIn;
 		// A point light's shadow draws the scene six times: only while the lights are on, and
 		// only for the brightest lamp
 		this.lamp.castShadow = on && builtIn;
 		for (const [i, l] of this.lampLights.entries()) {
 			l.intensity = on ? l.userData.intensity : 0;
+			l.visible = on;
 			l.castShadow = on && i === 0;
 		}
 		this.lampShade.emissiveIntensity = on ? 2.5 : 0;
@@ -955,6 +998,7 @@ function disposeTree(obj: THREE.Object3D) {
 		if (o === obj && obj.type === 'Scene') return;
 		// Real models share geometry and materials with the loader's cache
 		if (o.userData.shared) return;
+		if (mesh instanceof THREE.InstancedMesh) mesh.dispose();
 		mesh.geometry?.dispose();
 		const mats = Array.isArray(mesh.material)
 			? mesh.material
@@ -983,7 +1027,7 @@ function surroundings() {
 		(color) => new THREE.MeshStandardMaterial({ color, roughness: 1 })
 	);
 	const bark = new THREE.MeshStandardMaterial({ color: 0x5a4a3c, roughness: 1 });
-	const blob = new THREE.IcosahedronGeometry(1, 3);
+	const blob = new THREE.IcosahedronGeometry(1, 2);
 	const trunk = new THREE.CylinderGeometry(0.15, 0.25, 1, 6);
 	for (let i = 0; i < 70; i++) {
 		const angle = rnd() * Math.PI * 2;
@@ -1005,6 +1049,7 @@ function surroundings() {
 			grp.add(b);
 		}
 	}
+	const building = new THREE.BoxGeometry(1, 1, 1);
 	const facades = [0xd9d2c5, 0xc9c3b8, 0xe4ddd0, 0xb8b2a8].map(
 		(color) => new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
 	);
@@ -1013,10 +1058,28 @@ function surroundings() {
 		const dist = 75 + rnd() * 60;
 		const w = 14 + rnd() * 20;
 		const h = 10 + rnd() * 16;
-		const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 10 + rnd() * 8), facades[i % 4]);
+		const b = new THREE.Mesh(building, facades[i % 4]);
+		b.scale.set(w, h, 10 + rnd() * 8);
 		b.position.set(Math.cos(angle) * dist, -9 + h / 2, Math.sin(angle) * dist);
 		b.rotation.y = angle + Math.PI / 2;
 		grp.add(b);
+	}
+	// Instance by quadrant/material: fewer draws without duplicating tree vertex buffers.
+	const batches = new Map<string, THREE.Mesh<THREE.BufferGeometry, THREE.Material>[]>();
+	for (const child of grp.children) {
+		const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+		mesh.updateMatrix();
+		const key = `${Math.sign(mesh.position.x)}/${Math.sign(mesh.position.z)}/${mesh.material.uuid}`;
+		const batch = batches.get(key) ?? [];
+		batch.push(mesh);
+		batches.set(key, batch);
+	}
+	grp.clear();
+	for (const meshes of batches.values()) {
+		const batch = new THREE.InstancedMesh(meshes[0].geometry, meshes[0].material, meshes.length);
+		meshes.forEach((mesh, i) => batch.setMatrixAt(i, mesh.matrix));
+		batch.computeBoundingSphere();
+		grp.add(batch);
 	}
 	return grp;
 }

@@ -3,7 +3,8 @@ import {
 	WebGLRenderTarget,
 	type WebGLRenderer,
 	type Scene,
-	type Camera
+	type Camera,
+	type RenderTargetOptions
 } from 'three';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 
@@ -11,9 +12,14 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 export class AntialiasedRenderPass extends RenderPass {
 	private target: WebGLRenderTarget;
 
-	constructor(scene: Scene, camera: Camera, samples = 4) {
+	constructor(
+		scene: Scene,
+		camera: Camera,
+		samples = 4,
+		color: RenderTargetOptions = { type: HalfFloatType }
+	) {
 		super(scene, camera);
-		this.target = new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples });
+		this.target = new WebGLRenderTarget(1, 1, { ...color, samples });
 	}
 	get texture() {
 		return this.target.texture;
