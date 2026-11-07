@@ -1,0 +1,298 @@
+{
+	"dpr": {
+		"baseline": 1.5,
+		"optimized": 1.25
+	},
+	"furnished": true,
+	"results": [
+		{
+			"calls": 1564,
+			"disjoint": false,
+			"fps": 26.684060721086198,
+			"gpuMedianMs": 64.306916,
+			"gpuP95Ms": 68.675458,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 1435272,
+			"variant": "baseline"
+		},
+		{
+			"calls": 1648,
+			"disjoint": false,
+			"fps": 26.46825280124662,
+			"gpuMedianMs": 57.131833,
+			"gpuP95Ms": 59.70325,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 90,
+			"shot": "window",
+			"triangles": 1474512,
+			"variant": "baseline"
+		},
+		{
+			"calls": 1560,
+			"disjoint": false,
+			"fps": 28.406400909031547,
+			"gpuMedianMs": 57.962166,
+			"gpuP95Ms": 62.004916,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 90,
+			"shot": "overview",
+			"triangles": 1474090,
+			"variant": "baseline"
+		},
+		{
+			"calls": 1160,
+			"disjoint": false,
+			"fps": 28.0303974087715,
+			"gpuMedianMs": 57.463916,
+			"gpuP95Ms": 64.638458,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 1112128,
+			"variant": "baseline"
+		},
+		{
+			"calls": 430,
+			"disjoint": false,
+			"fps": 27.68804799261652,
+			"gpuMedianMs": 49.539916,
+			"gpuP95Ms": 53.341208,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 42,
+				"rgbMAE": 0.21601334635416666,
+				"stripSSIM": 0.999133912103911
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 483866,
+			"variant": "shadows"
+		},
+		{
+			"calls": 514,
+			"disjoint": false,
+			"fps": 29.17436545749493,
+			"gpuMedianMs": 50.294749,
+			"gpuP95Ms": 52.595083,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 31,
+				"rgbMAE": 0.15421419270833334,
+				"stripSSIM": 0.9989947176623251
+			},
+			"samples": 90,
+			"shot": "window",
+			"triangles": 523106,
+			"variant": "shadows"
+		},
+		{
+			"calls": 446,
+			"disjoint": false,
+			"fps": 29.084798345342115,
+			"gpuMedianMs": 45.603166,
+			"gpuP95Ms": 47.436708,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 24,
+				"rgbMAE": 0.09013020833333334,
+				"stripSSIM": 0.9997731016017842
+			},
+			"samples": 90,
+			"shot": "overview",
+			"triangles": 522924,
+			"variant": "shadows"
+		},
+		{
+			"calls": 430,
+			"disjoint": false,
+			"fps": 28.47560589753383,
+			"gpuMedianMs": 50.252291,
+			"gpuP95Ms": 53.893666,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 31,
+				"rgbMAE": 0.1292890625,
+				"stripSSIM": 0.9996140213550863
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 483866,
+			"variant": "shadows"
+		},
+		{
+			"calls": 427,
+			"disjoint": false,
+			"fps": 60.54083142705417,
+			"gpuMedianMs": 19.313416,
+			"gpuP95Ms": 28.437,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 97,
+				"rgbMAE": 0.7532317708333334,
+				"stripSSIM": 0.9939810212563958
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 483863,
+			"variant": "msaa"
+		},
+		{
+			"calls": 511,
+			"disjoint": false,
+			"fps": 60.52454606590451,
+			"gpuMedianMs": 19.85275,
+			"gpuP95Ms": 27.647666,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 81,
+				"rgbMAE": 0.5319567057291666,
+				"stripSSIM": 0.9954332129175238
+			},
+			"samples": 90,
+			"shot": "window",
+			"triangles": 523103,
+			"variant": "msaa"
+		},
+		{
+			"calls": 443,
+			"disjoint": false,
+			"fps": 60.520476094048085,
+			"gpuMedianMs": 16.998249,
+			"gpuP95Ms": 19.404916,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 73,
+				"rgbMAE": 0.66698828125,
+				"stripSSIM": 0.9971351418517009
+			},
+			"samples": 90,
+			"shot": "overview",
+			"triangles": 522921,
+			"variant": "msaa"
+		},
+		{
+			"calls": 427,
+			"disjoint": false,
+			"fps": 59.50019833364274,
+			"gpuMedianMs": 19.514458,
+			"gpuP95Ms": 25.837208,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 134,
+				"rgbMAE": 1.6133225911458333,
+				"stripSSIM": 0.9941060260246442
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 483863,
+			"variant": "msaa"
+		},
+		{
+			"calls": 427,
+			"disjoint": false,
+			"fps": 61.43764079434351,
+			"gpuMedianMs": 13.855375,
+			"gpuP95Ms": 18.807749,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 99,
+				"rgbMAE": 0.9574892578125,
+				"stripSSIM": 0.9916427252077228
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 483863,
+			"variant": "optimized"
+		},
+		{
+			"calls": 511,
+			"disjoint": false,
+			"fps": 60.839586290322956,
+			"gpuMedianMs": 13.584875,
+			"gpuP95Ms": 20.420916,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 83,
+				"rgbMAE": 0.7236481119791667,
+				"stripSSIM": 0.9934806618607233
+			},
+			"samples": 90,
+			"shot": "window",
+			"triangles": 523103,
+			"variant": "optimized"
+		},
+		{
+			"calls": 443,
+			"disjoint": false,
+			"fps": 61.30790190673463,
+			"gpuMedianMs": 13.0175,
+			"gpuP95Ms": 19.640375,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 82,
+				"rgbMAE": 0.7577076822916666,
+				"stripSSIM": 0.996149925721373
+			},
+			"samples": 90,
+			"shot": "overview",
+			"triangles": 522921,
+			"variant": "optimized"
+		},
+		{
+			"calls": 427,
+			"disjoint": false,
+			"fps": 59.776833156453435,
+			"gpuMedianMs": 14.454249,
+			"gpuP95Ms": 21.519624,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 134,
+				"rgbMAE": 1.6656552734375,
+				"stripSSIM": 0.9931523512411575
+			},
+			"samples": 90,
+			"shot": "door",
+			"triangles": 483863,
+			"variant": "optimized"
+		}
+	],
+	"viewport": [1280, 800]
+}

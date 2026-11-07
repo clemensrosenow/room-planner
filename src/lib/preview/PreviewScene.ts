@@ -5,14 +5,13 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import { furnitureKind, modelInfo, MODELS } from '../planner/catalog';
 import { elevation } from '../planner/furniture';
 import { buildWalls, floorRects, type Geometry } from '../planner/geometry';
 import type { Furniture } from '../planner/types';
+import { AntialiasedRenderPass } from './AntialiasedRenderPass';
 import * as mat from './materials';
 import { loadModel, modelClone } from './modelLoader';
 import { buildLoggiaSet, buildPiece, MaterialKit } from './models';
@@ -43,7 +42,8 @@ const IDLE_FRAME_MS = 1000 / 15;
 
 /** Replaces NaN/Infinity with black and caps extreme HDR values. */
 const SanitizeShader = {
-	uniforms: { tDiffuse: { value: null } },
+	defines: { USE_AO: 1 },
+	uniforms: { tScene: { value: null }, tAO: { value: null } },
 	vertexShader: /* glsl */ `
 		varying vec2 vUv;
 		void main() {
@@ -51,10 +51,14 @@ const SanitizeShader = {
 			gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 		}`,
 	fragmentShader: /* glsl */ `
-		uniform sampler2D tDiffuse;
+		uniform sampler2D tScene;
+		uniform sampler2D tAO;
 		varying vec2 vUv;
 		void main() {
-			vec4 c = texture2D(tDiffuse, vUv);
+			vec4 c = texture2D(tScene, vUv);
+			#if USE_AO
+			c.rgb *= mix(vec3(1.0), texture2D(tAO, vUv).rgb, 0.7);
+			#endif
 			if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0);
 			gl_FragColor = vec4(min(c.rgb, vec3(64.0)), c.a);
 		}`
@@ -121,6 +125,7 @@ export class PreviewScene {
 	private lampOn = false;
 	private daylight = 1;
 	private bloom: UnrealBloomPass;
+	private ao: GTAOPass | null = null;
 	private lamp = new THREE.PointLight(0xffd6a6, 0, 0, 2);
 	private lampShade = new THREE.MeshStandardMaterial({
 		color: 0xffffff,
@@ -160,10 +165,11 @@ export class PreviewScene {
 
 	constructor(private el: HTMLElement) {
 		const r = (this.renderer = new THREE.WebGLRenderer({
-			antialias: true,
+			antialias: false,
 			preserveDrawingBuffer: false
 		}));
-		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.25 : 1.5));
+		// Bound supersampling while retaining geometry MSAA and native CSS detail.
+		r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 		r.shadowMap.enabled = true;
 		r.shadowMap.type = THREE.PCFShadowMap;
 		// Nothing moves in the room: shadows are only redrawn after a change (see invalidate)
@@ -184,6 +190,7 @@ export class PreviewScene {
 			u.rayleigh.value = 1.2;
 			u.cloudCoverage.value = 0.3;
 		}
+		this.sky.renderOrder = 1; // Shade only sky pixels left uncovered by opaque geometry
 		this.sky.scale.setScalar(1000);
 		this.scene.add(this.sky);
 		const ground = new THREE.Mesh(
@@ -232,28 +239,37 @@ export class PreviewScene {
 		// Phones get 2× MSAA and no ambient occlusion, which renders the whole scene once more
 		this.composer = new EffectComposer(
 			r,
-			new THREE.WebGLRenderTarget(1, 1, {
-				type: THREE.HalfFloatType,
-				samples: this.phone ? 2 : 4
-			})
+			new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false })
 		);
-		this.composer.addPass(new RenderPass(this.scene, this.camera));
+		const beauty = new AntialiasedRenderPass(this.scene, this.camera, this.phone ? 2 : 4);
+		this.composer.addPass(beauty);
 		if (!this.phone) {
-			const ao = new GTAOPass(this.scene, this.camera, 1, 1);
+			const ao = (this.ao = new GTAOPass(this.scene, this.camera, 1, 1));
 			ao.updateGtaoMaterial({ radius: 0.25, distanceExponent: 1.5, thickness: 1, scale: 1 });
-			ao.blendIntensity = 0.7;
+			// Composite AO with HDR sanitizing below, avoiding GTAO’s two full-resolution copies.
+			ao.output = GTAOPass.OUTPUT.Off;
+			ao.needsSwap = false;
 			this.composer.addPass(ao);
 		}
 		// The sky shader can produce NaN or huge values at sunset; bloom would smear them
 		// over the whole frame, so they are cleaned up first
-		this.composer.addPass(new ShaderPass(SanitizeShader));
+		const composite = new ShaderPass(SanitizeShader);
+		composite.uniforms.tScene.value = beauty.texture;
+		composite.material.defines.USE_AO = this.ao ? 1 : 0;
+		composite.uniforms.tAO.value = this.ao?.gtaoMap ?? null;
+		this.composer.addPass(composite);
 		this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.12, 0.4, 1.6);
 		this.composer.addPass(this.bloom);
-		this.composer.addPass(new OutputPass());
-		const vignette = new ShaderPass(VignetteShader);
-		vignette.uniforms.offset.value = 0.9;
-		vignette.uniforms.darkness.value = 0.85;
-		this.composer.addPass(vignette);
+		const output = new OutputPass();
+		// Same vignette in display color space, folded into the output pass.
+		output.material.fragmentShader = output.material.fragmentShader.replace(
+			/}\s*$/,
+			`
+			vec2 uv = (vUv - vec2(0.5)) * 0.9;
+			gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.15), dot(uv, uv));
+		}`
+		);
+		this.composer.addPass(output);
 
 		// Only used for the overview: orbit above the room, never down past the walls
 		this.controls = new OrbitControls(this.camera, r.domElement);
@@ -312,15 +328,22 @@ export class PreviewScene {
 	}
 
 	dispose() {
+		this.last = null; // Pending model loads must not rebuild a disposed preview
 		cancelAnimationFrame(this.frame);
 		this.resizeObserver.disconnect();
 		this.controls.dispose();
 		this.walk.dispose();
 		this.clearLamps();
+		this.sun.dispose();
+		this.lamp.dispose();
 		disposeTree(this.scene);
 		disposeTree(this.envScene);
 		this.envTarget?.dispose();
 		this.pmrem.dispose();
+		for (const pass of this.composer.passes) pass.dispose();
+		// These materials are omitted by GTAOPass.dispose() in the current three.js version.
+		this.ao?.gtaoMaterial.dispose();
+		this.ao?.blendMaterial.dispose();
 		this.composer.dispose();
 		this.renderer.dispose();
 		// Browsers allow only a few live WebGL contexts (iOS Safari about 16): free it now
@@ -333,6 +356,9 @@ export class PreviewScene {
 		const h = this.el.clientHeight || 1;
 		this.renderer.setSize(w, h, false);
 		this.composer.setSize(w, h);
+		// Broad contact shading needs fewer pixels; keep geometry and final color at full resolution.
+		const ratio = this.renderer.getPixelRatio();
+		this.ao?.setSize(Math.ceil((w * ratio) / 2), Math.ceil((h * ratio) / 2));
 		this.bloom.resolution.set(w, h);
 		this.camera.aspect = w / h;
 		this.updateFov(1);
@@ -860,8 +886,11 @@ export class PreviewScene {
 		// Look into the room (and the loggia) from above
 		if (this.geo) {
 			const inside = this.camera.position.y < this.geo.H / 100 + 0.02;
-			for (const o of this.roof)
-				o.visible = inside && (o !== this.shade || !this.lampLights.length);
+			for (const o of this.roof) {
+				const visible = inside && (o !== this.shade || !this.lampLights.length);
+				if (o.visible !== visible) this.invalidate(true);
+				o.visible = visible;
+			}
 		}
 	}
 

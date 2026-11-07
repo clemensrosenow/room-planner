@@ -1,0 +1,295 @@
+{
+	"dpr": 1.5,
+	"furnished": true,
+	"results": [
+		{
+			"calls": 1564,
+			"disjoint": false,
+			"fps": 25.097251850891038,
+			"gpuMedianMs": 60.180583,
+			"gpuP95Ms": 72.863458,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 1435272,
+			"variant": "baseline"
+		},
+		{
+			"calls": 1648,
+			"disjoint": false,
+			"fps": 24.234590839353835,
+			"gpuMedianMs": 70.086,
+			"gpuP95Ms": 78.614291,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 60,
+			"shot": "window",
+			"triangles": 1474512,
+			"variant": "baseline"
+		},
+		{
+			"calls": 1560,
+			"disjoint": false,
+			"fps": 26.563952716129116,
+			"gpuMedianMs": 62.223958,
+			"gpuP95Ms": 64.903916,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 60,
+			"shot": "overview",
+			"triangles": 1474090,
+			"variant": "baseline"
+		},
+		{
+			"calls": 1160,
+			"disjoint": false,
+			"fps": 26.136957658196458,
+			"gpuMedianMs": 60.480583,
+			"gpuP95Ms": 67.720999,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 0,
+				"rgbMAE": 0,
+				"stripSSIM": 1
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 1112128,
+			"variant": "baseline"
+		},
+		{
+			"calls": 430,
+			"disjoint": false,
+			"fps": 27.107617240371567,
+			"gpuMedianMs": 52.387541,
+			"gpuP95Ms": 68.665625,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 67,
+				"rgbMAE": 0.2784871238425926,
+				"stripSSIM": 0.9978403087392619
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 483866,
+			"variant": "shadows"
+		},
+		{
+			"calls": 514,
+			"disjoint": false,
+			"fps": 28.386242134605382,
+			"gpuMedianMs": 52.99325,
+			"gpuP95Ms": 59.467375,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 70,
+				"rgbMAE": 0.19444126157407407,
+				"stripSSIM": 0.9977218298955538
+			},
+			"samples": 60,
+			"shot": "window",
+			"triangles": 523106,
+			"variant": "shadows"
+		},
+		{
+			"calls": 446,
+			"disjoint": false,
+			"fps": 27.92516056975074,
+			"gpuMedianMs": 48.414416,
+			"gpuP95Ms": 50.354666,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 51,
+				"rgbMAE": 0.11653342013888889,
+				"stripSSIM": 0.9994066842100984
+			},
+			"samples": 60,
+			"shot": "overview",
+			"triangles": 522924,
+			"variant": "shadows"
+		},
+		{
+			"calls": 430,
+			"disjoint": false,
+			"fps": 26.90221046499582,
+			"gpuMedianMs": 52.106625,
+			"gpuP95Ms": 54.510249,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 51,
+				"rgbMAE": 0.1601005497685185,
+				"stripSSIM": 0.9992275466287999
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 483866,
+			"variant": "shadows"
+		},
+		{
+			"calls": 431,
+			"disjoint": false,
+			"fps": 43.38081122135679,
+			"gpuMedianMs": 33.905541,
+			"gpuP95Ms": 44.482166,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 60,
+				"rgbMAE": 0.2855078125,
+				"stripSSIM": 0.997771855212172
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 483867,
+			"variant": "msaa"
+		},
+		{
+			"calls": 515,
+			"disjoint": false,
+			"fps": 40.606388739068166,
+			"gpuMedianMs": 34.764291,
+			"gpuP95Ms": 36.460166,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 70,
+				"rgbMAE": 0.19864887152777777,
+				"stripSSIM": 0.9976680624228189
+			},
+			"samples": 60,
+			"shot": "window",
+			"triangles": 523107,
+			"variant": "msaa"
+		},
+		{
+			"calls": 447,
+			"disjoint": false,
+			"fps": 47.50593824284077,
+			"gpuMedianMs": 29.773416,
+			"gpuP95Ms": 31.420833,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 40,
+				"rgbMAE": 0.11888686342592593,
+				"stripSSIM": 0.9993939525605864
+			},
+			"samples": 60,
+			"shot": "overview",
+			"triangles": 522925,
+			"variant": "msaa"
+		},
+		{
+			"calls": 431,
+			"disjoint": false,
+			"fps": 42.665149683657226,
+			"gpuMedianMs": 33.645041,
+			"gpuP95Ms": 35.389833,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 54,
+				"rgbMAE": 0.16313093171296297,
+				"stripSSIM": 0.999203652467193
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 483867,
+			"variant": "msaa"
+		},
+		{
+			"calls": 431,
+			"disjoint": false,
+			"fps": 60.15640665694951,
+			"gpuMedianMs": 21.806083,
+			"gpuP95Ms": 31.108958,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 81,
+				"rgbMAE": 0.5869283854166667,
+				"stripSSIM": 0.9941384679829021
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 483867,
+			"variant": "optimized"
+		},
+		{
+			"calls": 515,
+			"disjoint": false,
+			"fps": 60.48996874557726,
+			"gpuMedianMs": 20.897416,
+			"gpuP95Ms": 29.725875,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 86,
+				"rgbMAE": 0.4416859085648148,
+				"stripSSIM": 0.9951820082097884
+			},
+			"samples": 60,
+			"shot": "window",
+			"triangles": 523107,
+			"variant": "optimized"
+		},
+		{
+			"calls": 447,
+			"disjoint": false,
+			"fps": 60.86427267212557,
+			"gpuMedianMs": 20.007125,
+			"gpuP95Ms": 27.667916,
+			"hours": 10,
+			"lamp": false,
+			"quality": {
+				"maxChannelError": 69,
+				"rgbMAE": 0.28990335648148147,
+				"stripSSIM": 0.9979070359438917
+			},
+			"samples": 60,
+			"shot": "overview",
+			"triangles": 522925,
+			"variant": "optimized"
+		},
+		{
+			"calls": 431,
+			"disjoint": false,
+			"fps": 60.0480384305655,
+			"gpuMedianMs": 22.493875,
+			"gpuP95Ms": 32.683458,
+			"hours": 21.5,
+			"lamp": true,
+			"quality": {
+				"maxChannelError": 64,
+				"rgbMAE": 0.3863013599537037,
+				"stripSSIM": 0.9978561119954997
+			},
+			"samples": 60,
+			"shot": "door",
+			"triangles": 483867,
+			"variant": "optimized"
+		}
+	],
+	"viewport": [1280, 800]
+}
