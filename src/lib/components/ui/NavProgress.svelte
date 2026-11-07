@@ -3,20 +3,10 @@
 	import { duration } from '#lib/motion.ts';
 	import { fade } from 'svelte/transition';
 
-	/** Fast page changes stay clean: the bar only shows once one takes longer than this */
-	const DELAY = 150;
-
-	let shown = $state(false);
-	$effect(() => {
-		// Query-only changes (selection, viewpoint) are not page changes
-		const to = navigating.to?.url.pathname;
-		if (!to || to === navigating.from?.url.pathname) {
-			shown = false;
-			return;
-		}
-		const timer = setTimeout(() => (shown = true), DELAY);
-		return () => clearTimeout(timer);
-	});
+	// Show immediately for route changes; selection and lighting query updates stay quiet.
+	const shown = $derived(
+		!!navigating.to && navigating.to.url.pathname !== navigating.from?.url.pathname
+	);
 </script>
 
 {#if shown}

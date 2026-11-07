@@ -25,6 +25,19 @@ export class AntialiasedRenderPass extends RenderPass {
 		return this.target.texture;
 	}
 
+	/** Compile the same HDR material variants used by the real geometry pass. */
+	compileAsync(renderer: WebGLRenderer) {
+		const target = renderer.getRenderTarget();
+		const face = renderer.getActiveCubeFace();
+		const mip = renderer.getActiveMipmapLevel();
+		renderer.setRenderTarget(this.target);
+		try {
+			return renderer.compileAsync(this.scene, this.camera);
+		} finally {
+			renderer.setRenderTarget(target, face, mip);
+		}
+	}
+
 	override setSize(width: number, height: number) {
 		this.target.setSize(width, height);
 	}

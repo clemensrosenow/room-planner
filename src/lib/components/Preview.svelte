@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Furniture } from '#lib/planner/types.ts';
-	import { PreviewScene, type CameraMode } from '#lib/preview/PreviewScene.ts';
+	import type { PreviewScene, CameraMode } from '#lib/preview/PreviewScene.ts';
 	import { makeShots } from '#lib/preview/shots.ts';
 	import { dayGradient, dayOfYear, formatTime, sunDirection } from '#lib/preview/sun.ts';
 	import { setParams } from '#lib/url.ts';
@@ -41,7 +41,7 @@
 	let container: HTMLDivElement;
 	let scene = $state<PreviewScene | null>(null);
 	let failed = $state(false);
-	/** Every real model is in, or loading took too long to keep waiting */
+	/** Models (or timeout stand-ins) and lighting programs are prepared */
 	let ready = $state(false);
 
 	let mode = $state<CameraMode>('walk');
@@ -55,22 +55,69 @@
 	const isDay = $derived(sunDirection(hours, dayOfYear()).y > -0.03);
 	/** Slider track colored by today's real sun path */
 	const track = dayGradient();
+	let loadTimer: ReturnType<typeof setTimeout> | undefined;
+	let reveal: () => Promise<void> = async () => {};
 
 	onMount(() => {
-		try {
-			scene = new PreviewScene(container);
-		} catch {
-			failed = true;
-			return;
+		let disposed = false;
+		const frames = new Set<number>();
+		let instance: PreviewScene | null = null;
+
+		function nextFrame() {
+			return new Promise<void>((resolve) => {
+				const frame = requestAnimationFrame(() => {
+					frames.delete(frame);
+					resolve();
+				});
+				frames.add(frame);
+			});
 		}
-		scene.onModeChange = (m) => (mode = m);
-		// Walking away from a viewpoint unselects it
-		scene.onManual = () => (activeShot = '');
-		scene.onSettled = () => (ready = true);
-		const timer = setTimeout(() => (ready = true), LOAD_TIMEOUT);
+
+		async function paintLoader() {
+			await nextFrame();
+			if (!disposed) await nextFrame();
+			return !disposed;
+		}
+
+		reveal = async () => {
+			const s = instance;
+			if (!s || disposed || (ready && s.isPrepared)) return;
+			clearTimeout(loadTimer);
+			ready = false;
+			try {
+				if ((await paintLoader()) && (await s.prepare()) && !disposed) {
+					clearTimeout(loadTimer);
+					ready = true;
+				}
+			} catch {
+				if (!disposed) failed = true;
+			}
+		};
+
+		async function initialize() {
+			try {
+				if (!(await paintLoader())) return;
+				const { PreviewScene } = await import('#lib/preview/PreviewScene.ts');
+				if (disposed) return;
+				instance = new PreviewScene(container);
+				instance.onModeChange = (m) => (mode = m);
+				instance.onManual = () => (activeShot = '');
+				instance.onSettled = () => untrack(() => void reveal());
+				scene = instance;
+			} catch {
+				if (!disposed) failed = true;
+			}
+		}
+
+		// Paint the loader before importing renderer code, constructing WebGL or building the Room.
+		void initialize();
+
 		return () => {
-			clearTimeout(timer);
-			scene?.dispose();
+			disposed = true;
+			for (const frame of frames) cancelAnimationFrame(frame);
+			frames.clear();
+			clearTimeout(loadTimer);
+			instance?.dispose();
 		};
 	});
 
@@ -79,6 +126,9 @@
 	$effect(() => {
 		const s = scene;
 		if (!s) return;
+		ready = false;
+		clearTimeout(loadTimer);
+		loadTimer = setTimeout(() => void reveal(), LOAD_TIMEOUT);
 		s.build(planner.geo, $state.snapshot(furn ?? planner.furn));
 		if (placed) return;
 		placed = true;

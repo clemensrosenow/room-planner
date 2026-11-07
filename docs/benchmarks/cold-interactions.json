@@ -1,0 +1,351 @@
+{
+	"baselineCommit": "60b79eaa7d47c419439e1db6673914c9fdac4c8d",
+	"host": "M3 Mac; Chromium via T3 preview; no physical phone",
+	"method": "Fresh WebGL context per UI navigation, instrumentation preimports renderer JS. Serial active-tab runs; shader driver caches may already be warm. nextPaintMs awaits two RAF callbacks, not input-to-photon.",
+	"phone": {
+		"baseline": {
+			"actions": [
+				{
+					"longTasks": [
+						{
+							"duration": 109,
+							"start": 11133
+						}
+					],
+					"maxFrameGapMs": 99.90000000000146,
+					"name": "first evening",
+					"newPrograms": 13,
+					"nextPaintMs": 123
+				},
+				{
+					"longTasks": [
+						{
+							"duration": 138,
+							"start": 11950.29999999702
+						}
+					],
+					"maxFrameGapMs": 133.5,
+					"name": "first lights on",
+					"newPrograms": 14,
+					"nextPaintMs": 145.1000000089407
+				},
+				{
+					"longTasks": [
+						{
+							"duration": 182,
+							"start": 12799.60000000894
+						}
+					],
+					"maxFrameGapMs": 166.60000000000036,
+					"name": "return daylight",
+					"newPrograms": 13,
+					"nextPaintMs": 191
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.69999999999891,
+					"name": "lights off",
+					"newPrograms": 0,
+					"nextPaintMs": 32.1000000089407
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.700000000000728,
+					"name": "repeat evening",
+					"newPrograms": 0,
+					"nextPaintMs": 32.20000000298023
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.700000000000728,
+					"name": "repeat lights on",
+					"newPrograms": 0,
+					"nextPaintMs": 32.5
+				}
+			],
+			"extraSweepPrograms": 52,
+			"glError": 1282,
+			"navigation": {
+				"firstFeedbackMs": null,
+				"longTasks": [
+					{
+						"duration": 115,
+						"start": 9968.60000000894
+					},
+					{
+						"duration": 167,
+						"start": 10099.79999999702
+					}
+				],
+				"maxFrameGapMs": 166.70000000000073,
+				"readyMs": 677.9000000059605,
+				"roomLoaderMs": 160.60000000297987,
+				"webglContextMs": 48.400000005960464
+			},
+			"parallelCompile": true,
+			"phone": true,
+			"programs": 124,
+			"shaderFailures": 0,
+			"viewport": [390, 844]
+		},
+		"updated": {
+			"actions": [
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.699999999999818,
+					"name": "first evening",
+					"newPrograms": 0,
+					"nextPaintMs": 31.100000008940697
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.699999999999818,
+					"name": "first lights on",
+					"newPrograms": 0,
+					"nextPaintMs": 33.29999999701977
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.600000000000364,
+					"name": "return daylight",
+					"newPrograms": 0,
+					"nextPaintMs": 32.29999999701977
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.699999999999818,
+					"name": "lights off",
+					"newPrograms": 0,
+					"nextPaintMs": 32.1000000089407
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.600000000000364,
+					"name": "repeat evening",
+					"newPrograms": 0,
+					"nextPaintMs": 32.900000005960464
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.599999999999454,
+					"name": "repeat lights on",
+					"newPrograms": 0,
+					"nextPaintMs": 33.19999998807907
+				}
+			],
+			"extraSweepPrograms": 0,
+			"glError": 0,
+			"navigation": {
+				"firstFeedbackMs": 22.199999991059485,
+				"longTasks": [
+					{
+						"duration": 52,
+						"start": 2507.1000000089407
+					},
+					{
+						"duration": 68,
+						"start": 2671.5
+					}
+				],
+				"maxFrameGapMs": 66.70000000000027,
+				"readyMs": 1422.7000000029802,
+				"roomLoaderMs": 55.699999991059485,
+				"webglContextMs": 73.59999999403954
+			},
+			"parallelCompile": true,
+			"phone": true,
+			"programs": 129,
+			"shaderFailures": 0,
+			"viewport": [390, 844]
+		}
+	},
+	"desktop": {
+		"baseline": {
+			"actions": [
+				{
+					"longTasks": [
+						{
+							"duration": 336,
+							"start": 13047.29999999702
+						}
+					],
+					"maxFrameGapMs": 333.39999999999964,
+					"name": "first evening",
+					"newPrograms": 15,
+					"nextPaintMs": 353.29999999701977
+				},
+				{
+					"longTasks": [
+						{
+							"duration": 646,
+							"start": 14097.40000000596
+						}
+					],
+					"maxFrameGapMs": 633.3000000000011,
+					"name": "first lights on",
+					"newPrograms": 16,
+					"nextPaintMs": 658.5
+				},
+				{
+					"longTasks": [
+						{
+							"duration": 787,
+							"start": 15447.5
+						}
+					],
+					"maxFrameGapMs": 783.3999999999996,
+					"name": "return daylight",
+					"newPrograms": 15,
+					"nextPaintMs": 789.2999999970198
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.299999999999272,
+					"name": "lights off",
+					"newPrograms": 0,
+					"nextPaintMs": 26.400000005960464
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.299999999999272,
+					"name": "repeat evening",
+					"newPrograms": 0,
+					"nextPaintMs": 32.29999999701977
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.399999999997817,
+					"name": "repeat lights on",
+					"newPrograms": 0,
+					"nextPaintMs": 30.19999998807907
+				}
+			],
+			"extraSweepPrograms": 60,
+			"glError": 1282,
+			"navigation": {
+				"firstFeedbackMs": null,
+				"longTasks": [
+					{
+						"duration": 130,
+						"start": 11683
+					},
+					{
+						"duration": 374,
+						"start": 11830.90000000596
+					}
+				],
+				"maxFrameGapMs": 366.60000000000036,
+				"readyMs": 873,
+				"roomLoaderMs": 172.8000000029806,
+				"webglContextMs": 48.70000000298023
+			},
+			"parallelCompile": true,
+			"phone": false,
+			"programs": 144,
+			"shaderFailures": 0,
+			"viewport": [1280, 800]
+		},
+		"updated": {
+			"actions": [
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.699999999999818,
+					"name": "first evening",
+					"newPrograms": 0,
+					"nextPaintMs": 27.5
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.600000000000364,
+					"name": "first lights on",
+					"newPrograms": 0,
+					"nextPaintMs": 33.5
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.600000000000364,
+					"name": "return daylight",
+					"newPrograms": 0,
+					"nextPaintMs": 32.5
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 17.100000000000364,
+					"name": "lights off",
+					"newPrograms": 0,
+					"nextPaintMs": 30.799999997019768
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 16.900000000000546,
+					"name": "repeat evening",
+					"newPrograms": 0,
+					"nextPaintMs": 33.29999999701977
+				},
+				{
+					"longTasks": [],
+					"maxFrameGapMs": 16.80000000000109,
+					"name": "repeat lights on",
+					"newPrograms": 0,
+					"nextPaintMs": 33.20000000298023
+				}
+			],
+			"extraSweepPrograms": 0,
+			"glError": 0,
+			"navigation": {
+				"firstFeedbackMs": 26.000000002980414,
+				"longTasks": [
+					{
+						"duration": 88,
+						"start": 2759.0999999940395
+					}
+				],
+				"maxFrameGapMs": 67,
+				"readyMs": 1397.2000000029802,
+				"roomLoaderMs": 75.90000000298005,
+				"webglContextMs": 94.70000000298023
+			},
+			"parallelCompile": true,
+			"phone": false,
+			"programs": 147,
+			"shaderFailures": 0,
+			"viewport": [1280, 800]
+		}
+	},
+	"lifecycle": {
+		"disposed": true,
+		"rebuild": {
+			"isPrepared": true,
+			"latestBuild": true,
+			"latestLamp": true,
+			"latestTime": true,
+			"ready": true,
+			"samePromise": true
+		}
+	},
+	"quality": {
+		"day": {
+			"rgbMAE": 0,
+			"maxChannelError": 0,
+			"ssim": 1
+		},
+		"night": {
+			"rgbMAE": 0,
+			"maxChannelError": 0,
+			"ssim": 1
+		}
+	},
+	"navigationCancel": {
+		"disposed": true,
+		"errors": [],
+		"prepared": false,
+		"url": "/furnish"
+	},
+	"withoutParallelCompile": {
+		"glError": 0,
+		"newPrograms": 0,
+		"parallelCompile": false,
+		"phone": true,
+		"ready": true
+	}
+}

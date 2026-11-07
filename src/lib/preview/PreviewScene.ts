@@ -102,6 +102,12 @@ export class PreviewScene {
 
 	private renderer: THREE.WebGLRenderer;
 	private composer: EffectComposer;
+	private beauty: AntialiasedRenderPass;
+	private buildVersion = 0;
+	private preparedVersion = -1;
+	private preparation: Promise<boolean> | null = null;
+	private preparing = false;
+	private disposed = false;
 	private scene = new THREE.Scene();
 	private camera = new THREE.PerspectiveCamera(55, 1, 0.05, 3000);
 	private controls: OrbitControls;
@@ -260,7 +266,12 @@ export class PreviewScene {
 			r,
 			new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false })
 		);
-		const beauty = new AntialiasedRenderPass(this.scene, this.camera, this.phone ? 2 : 4, hdr);
+		const beauty = (this.beauty = new AntialiasedRenderPass(
+			this.scene,
+			this.camera,
+			this.phone ? 2 : 4,
+			hdr
+		));
 		this.composer.addPass(beauty);
 		if (!this.phone) {
 			const ao = (this.ao = new GTAOPass(this.scene, this.camera, 1, 1));
@@ -322,7 +333,12 @@ export class PreviewScene {
 			const now = performance.now();
 			const dt = Math.min((now - this.lastTime) / 1000, 0.1);
 			this.lastTime = now;
-			if (!this.el.offsetParent) {
+			if (
+				!this.el.offsetParent ||
+				this.preparing ||
+				this.preparedVersion !== this.buildVersion ||
+				!this.geo
+			) {
 				this.dirty = true;
 				return;
 			}
@@ -336,7 +352,7 @@ export class PreviewScene {
 			this.rendered = now;
 			this.composer.render();
 		};
-		loop();
+		this.frame = requestAnimationFrame(loop);
 	}
 
 	/** Draws the next frame in full, with fresh shadows when `shadows` is set. */
@@ -357,6 +373,7 @@ export class PreviewScene {
 	}
 
 	dispose() {
+		this.disposed = true;
 		this.last = null; // Pending model loads must not rebuild a disposed preview
 		cancelAnimationFrame(this.frame);
 		this.resizeObserver.disconnect();
@@ -419,6 +436,7 @@ export class PreviewScene {
 	/* ---------- Room ---------- */
 
 	build(g: Geometry, furn: Furniture[]) {
+		this.buildVersion++;
 		this.root.matrixAutoUpdate = this.root.matrixWorldAutoUpdate = true;
 		this.geo = g;
 		this.last = { g, furn };
@@ -691,10 +709,92 @@ export class PreviewScene {
 			});
 	}
 
+	/** Whether the current build is ready to interact with. */
+	get isPrepared() {
+		return !this.disposed && !this.preparing && this.preparedVersion === this.buildVersion;
+	}
+
+	/** Prepare first-use lighting and shadow programs before revealing the controls. */
+	prepare(): Promise<boolean> {
+		if (this.disposed) return Promise.resolve(false);
+		if (this.preparation) return this.preparation;
+		if (this.preparedVersion === this.buildVersion) return Promise.resolve(true);
+		this.preparing = true;
+		const prepareLatest = async () => {
+			// A late model or an edit can rebuild while shader compilation yields.
+			// Every caller waits for the latest Room, including the timeout fallback.
+			while (!this.disposed && this.preparedVersion !== this.buildVersion) {
+				const version = this.buildVersion;
+				if (await this.prepareLighting(version)) this.preparedVersion = version;
+			}
+			return !this.disposed;
+		};
+		this.preparation = prepareLatest().finally(() => {
+			this.preparing = false;
+			this.preparation = null;
+			if (!this.disposed) {
+				// Public setters keep the latest requested state while compilation yields.
+				this.applyTime(this.hours);
+				this.applyLamp(this.lampOn);
+				this.update(0);
+				this.invalidate(true);
+				if (this.preparedVersion === this.buildVersion) {
+					this.updateEnvironment(performance.now());
+					this.composer.render();
+				}
+			}
+		});
+		return this.preparation;
+	}
+
+	private async prepareLighting(version: number) {
+		const current = () => !this.disposed && version === this.buildVersion;
+		const yieldTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+		// Finish the mount/build effects (including camera placement), leaving the loader painted.
+		await yieldTask();
+		if (!current()) return false;
+		this.updateEnvironment(performance.now());
+		const states = new Map<string, { hours: number; lamp: boolean }>();
+		// Only visibility/shadow counts change shader code. Cover the slider's entire range,
+		// deduplicating its many uniform-only changes into a handful of shader variants.
+		for (const lamp of [false, true]) {
+			for (let hours = 5; hours <= 21.5; hours += 0.25) {
+				this.applyTime(hours);
+				this.applyLamp(lamp);
+				const key = [this.sun.visible, this.windowLight.visible, this.bounce.visible, lamp].join(
+					'/'
+				);
+				if (!states.has(key)) states.set(key, { hours, lamp });
+			}
+		}
+		const roof = this.roof.map((object) => ({ object, visible: object.visible }));
+		try {
+			// Compile ceiling materials too, even when the starting camera is above the Room.
+			for (const { object } of roof) object.visible = true;
+			for (const state of states.values()) {
+				if (!current()) return false;
+				this.applyTime(state.hours);
+				this.applyLamp(state.lamp);
+				await this.beauty.compileAsync(this.renderer);
+				if (!current()) return false;
+				// Allocate shadow faces and prepare depth/postprocessing programs behind the loader.
+				this.composer.render();
+				await yieldTask();
+			}
+			return current();
+		} finally {
+			for (const { object, visible } of roof) object.visible = visible;
+		}
+	}
+
 	/* ---------- Lighting ---------- */
 
 	setTime(hours: number) {
 		this.hours = hours;
+		if (!this.preparing) this.applyTime(hours);
+	}
+
+	private applyTime(hours: number) {
 		const dir = sunDirection(hours, dayOfYear());
 		const light = sunLight(dir.y);
 		this.sun.color.copy(light.color);
@@ -750,6 +850,10 @@ export class PreviewScene {
 	/** Switches all lights: the placed lamps, or the built-in ceiling light without any. */
 	setLamp(on: boolean) {
 		this.lampOn = on;
+		if (!this.preparing) this.applyLamp(on);
+	}
+
+	private applyLamp(on: boolean) {
 		const builtIn = this.lampLights.length === 0;
 		this.lamp.intensity = on && builtIn ? 18 : 0;
 		this.lamp.visible = on && builtIn;

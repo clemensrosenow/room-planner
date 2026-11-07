@@ -29,9 +29,20 @@
 
 	// Moving between steps cross-fades the pages (View Transitions API, where supported).
 	// Query-only changes (selection, view, focus) stay instant.
-	onNavigate((nav) => {
-		if (!document.startViewTransition || nav.from?.url.pathname === nav.to?.url.pathname) return;
-		return new Promise((resolve) => {
+	onNavigate(async (nav) => {
+		if (nav.from?.url.pathname === nav.to?.url.pathname) return;
+		// Paint the pending tab/progress before snapshots or a new page can occupy the thread.
+		await new Promise<void>((resolve) => {
+			const timer = setTimeout(resolve, 100);
+			requestAnimationFrame(() =>
+				requestAnimationFrame(() => {
+					clearTimeout(timer);
+					resolve();
+				})
+			);
+		});
+		if (!document.startViewTransition) return;
+		return new Promise<void>((resolve) => {
 			document.startViewTransition(async () => {
 				resolve();
 				await nav.complete;
