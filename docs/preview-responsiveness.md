@@ -1,5 +1,8 @@
 # Experience interaction responsiveness
 
+The subsequent [cold-startup report](experience-startup-performance.md) measures
+the complete production load and documents the current startup optimizations.
+
 Follow-up to the mobile throughput work, measured against PR head `60b79ea`.
 The earlier steady-state benchmarks deliberately warmed shaders, so they did not
 cover the first-use stalls addressed here.

@@ -2,6 +2,8 @@
 	import { page } from '$app/state';
 	import { planner } from '#lib/planner/planner.svelte.ts';
 	import type { Furniture } from '#lib/planner/types.ts';
+	import { previewModelIds } from '#lib/preview/modelIds.ts';
+	import { modelUrl } from '#lib/preview/modelUrl.ts';
 	import type { PreviewScene, CameraMode } from '#lib/preview/PreviewScene.ts';
 	import { makeShots } from '#lib/preview/shots.ts';
 	import { dayGradient, dayOfYear, formatTime, sunDirection } from '#lib/preview/sun.ts';
@@ -50,6 +52,8 @@
 	let hours = $state(parseTime(params.get('time')));
 	let lamp = $state(params.get('lamp') === '1');
 
+	const modelIds = $derived(previewModelIds(planner.geo, furn ?? planner.furn));
+	let preloadModels = $state(false);
 	const shots = $derived(makeShots(planner.geo));
 	const corners = $derived(shots.filter((s) => s.id.startsWith('corner')));
 	const isDay = $derived(sunDirection(hours, dayOfYear()).y > -0.03);
@@ -97,7 +101,11 @@
 		async function initialize() {
 			try {
 				if (!(await paintLoader())) return;
-				const { PreviewScene } = await import('#lib/preview/PreviewScene.ts');
+				// Queue critical renderer modules first, then overlap model downloads. Starting
+				// every GLB earlier can occupy all HTTP/1 connections and delay those modules.
+				const rendererModule = import('#lib/preview/PreviewScene.ts');
+				preloadModels = true;
+				const { PreviewScene } = await rendererModule;
 				if (disposed) return;
 				instance = new PreviewScene(container);
 				instance.onModeChange = (m) => (mode = m);
@@ -203,6 +211,19 @@
 		active ? 'bg-ink text-sheet' : 'text-muted hover:text-ink'
 	];
 </script>
+
+<svelte:head>
+	<!-- Start model downloads while renderer code loads; reuse GLTFLoader's anonymous fetches. -->
+	{#each preloadModels ? modelIds : [] as id (id)}
+		<link
+			rel="preload"
+			as="fetch"
+			href={modelUrl(id)}
+			crossorigin="anonymous"
+			fetchpriority="low"
+		/>
+	{/each}
+</svelte:head>
 
 <div
 	bind:this={wrap}

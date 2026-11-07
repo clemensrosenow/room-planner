@@ -769,8 +769,22 @@ export class PreviewScene {
 		}
 		const roof = this.roof.map((object) => ({ object, visible: object.visible }));
 		try {
+			// Warm the same programs without shading full-size images behind the loader.
+			// Shadow maps retain their real sizes; final color/AO buffers are restored below.
+			this.composer.setSize(32, 32);
 			// Compile ceiling materials too, even when the starting camera is above the Room.
 			for (const { object } of roof) object.visible = true;
+			// Submit every variant before waiting. compile() queues programs without using
+			// them, allowing the driver to compile independent lighting states in parallel.
+			// Keep the readiness checks below sequential: compileAsync tracks each material's
+			// current program, which must stay unchanged while its promise is pending.
+			for (const state of states.values()) {
+				if (!current()) return false;
+				this.applyTime(state.hours);
+				this.applyLamp(state.lamp);
+				this.beauty.compile(this.renderer);
+				await yieldTask();
+			}
 			for (const state of states.values()) {
 				if (!current()) return false;
 				this.applyTime(state.hours);
@@ -784,6 +798,7 @@ export class PreviewScene {
 			return current();
 		} finally {
 			for (const { object, visible } of roof) object.visible = visible;
+			if (!this.disposed) this.resize();
 		}
 	}
 
